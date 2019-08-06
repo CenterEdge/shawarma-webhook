@@ -1,0 +1,47 @@
+sidecars:
+- name: shawarma
+  sidecar:
+    volumes:
+    - name: shawarma-token
+      secret:
+        defaultMode: 420
+        secretName: "|SHAWARMA_TOKEN_NAME|"
+    containers:
+    - name: shawarma
+      image: "|SHAWARMA_IMAGE|"
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: shawarma-token
+        readOnly: true
+      env:
+        - name: LOG_LEVEL
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['shawarma.centeredge.io/log-level']
+        - name: SHAWARMA_SERVICE
+          # References service to monitor
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['shawarma.centeredge.io/service-name']
+        - name: SHAWARMA_URL
+          # Will POST state to this URL as pod is attached/detached from the service
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['shawarma.centeredge.io/state-url']
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+      resources:
+        requests:
+          cpu: "0.1"
+          memory: 128Mi
+        limits:
+          cpu: "0.2"
+          memory: 128Mi
+
