@@ -8,9 +8,9 @@ import (
 
 /*Conf is the required config to create httpd server*/
 type Conf struct {
-	Port          int
-	CertFile      string
-  KeyFile       string
+	Port     int
+	CertFile string
+	KeyFile  string
 }
 
 /*Route is the signature of the route handler*/

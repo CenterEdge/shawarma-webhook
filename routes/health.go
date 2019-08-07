@@ -2,7 +2,7 @@ package routes
 
 import (
 	"fmt"
-  "net/http"
+	"net/http"
 )
 
 /*HealthController is an interface that implements mutation method*/
@@ -19,9 +19,9 @@ type healthController struct {
 }
 
 func (controller healthController) Health(writer http.ResponseWriter, request *http.Request) {
-  if request.Body != nil {
-    defer request.Body.Close()
-  }
+	if request.Body != nil {
+		defer request.Body.Close()
+	}
 
 	if _, err := writer.Write([]byte("Healthy")); err != nil {
 		writeError(writer, fmt.Sprintf("Failed to write response: %v", err), http.StatusInternalServerError)

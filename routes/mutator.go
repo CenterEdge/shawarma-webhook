@@ -14,7 +14,7 @@ import (
 
 /*SideCars is an array of named SideCar instances*/
 type SideCars struct {
-	Sidecars []SideCar	`yaml:"sidecars"`
+	Sidecars []SideCar `yaml:"sidecars"`
 }
 
 /*SideCar is a named sidecar to be injected*/
@@ -52,11 +52,11 @@ type MutatorController interface {
 func NewMutatorController(sideCarConfigFile string, shawarmaImage string, shawarmaSecretTokenName string) (MutatorController, error) {
 	mapOfSideCars, err := loadConfig(sideCarConfigFile)
 	if mapOfSideCars != nil {
-    mutator := webhook.Mutator{
-      SideCars: mapOfSideCars,
-      ShawarmaImage: shawarmaImage,
-      ShawarmaSecretTokenName: shawarmaSecretTokenName,
-    }
+		mutator := webhook.Mutator{
+			SideCars:                mapOfSideCars,
+			ShawarmaImage:           shawarmaImage,
+			ShawarmaSecretTokenName: shawarmaSecretTokenName,
+		}
 
 		return mutatorController{mutator: mutator}, nil
 	}

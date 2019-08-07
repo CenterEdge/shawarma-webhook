@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-  log "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,12 +26,12 @@ var (
 
 const (
 	sideCarNameSpace                 = "shawarma.centeredge.io/"
-  injectAnnotation                 = "service-name"
-  imageAnnotation                  = "image"
+	injectAnnotation                 = "service-name"
+	imageAnnotation                  = "image"
 	statusAnnotation                 = "status"
 	sideCarInjectionAnnotation       = sideCarNameSpace + injectAnnotation
-  sideCarInjectionStatusAnnotation = sideCarNameSpace + statusAnnotation
-  sideCarInjectionImageAnnotation  = sideCarNameSpace + imageAnnotation
+	sideCarInjectionStatusAnnotation = sideCarNameSpace + statusAnnotation
+	sideCarInjectionImageAnnotation  = sideCarNameSpace + imageAnnotation
 	injectedValue                    = "injected"
 	sideCarName                      = "shawarma"
 )
@@ -51,9 +51,9 @@ type SideCar struct {
 
 /*Mutator is the interface for mutating webhook*/
 type Mutator struct {
-  SideCars                map[string]*SideCar
-  ShawarmaImage           string
-  ShawarmaSecretTokenName string
+	SideCars                map[string]*SideCar
+	ShawarmaImage           string
+	ShawarmaSecretTokenName string
 }
 
 /*Mutate function performs the actual mutation of pod spec*/
@@ -164,46 +164,46 @@ func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta) ([]string, 
 func createPatch(pod *corev1.Pod, sideCarNames []string, mutator *Mutator, annotations map[string]string) ([]byte, error) {
 
 	var patch []patchOperation
-	var containers       []corev1.Container
-	var volumes          []corev1.Volume
+	var containers []corev1.Container
+	var volumes []corev1.Volume
 	var imagePullSecrets []corev1.LocalObjectReference
-  count := 0
+	count := 0
 
-  // Check for image override in annotations
-  shawarmaImage := mutator.ShawarmaImage
-  existingAnnotations := pod.ObjectMeta.GetAnnotations()
-  if existingAnnotations != nil {
-    if image, ok := existingAnnotations[sideCarInjectionImageAnnotation]; ok {
-      log.Infof("Overriding Shawarma image, using %v", image)
-      shawarmaImage = image;
-    }
-  }
+	// Check for image override in annotations
+	shawarmaImage := mutator.ShawarmaImage
+	existingAnnotations := pod.ObjectMeta.GetAnnotations()
+	if existingAnnotations != nil {
+		if image, ok := existingAnnotations[sideCarInjectionImageAnnotation]; ok {
+			log.Infof("Overriding Shawarma image, using %v", image)
+			shawarmaImage = image
+		}
+	}
 
 	for _, name := range sideCarNames {
 		if sideCar, ok := mutator.SideCars[name]; ok {
-      sideCarCopy := *sideCar
+			sideCarCopy := *sideCar
 
-      sideCarCopy.Containers = make([]corev1.Container, len(sideCar.Containers))
-      sideCarCopy.Volumes = make([]corev1.Volume, len(sideCar.Volumes))
+			sideCarCopy.Containers = make([]corev1.Container, len(sideCar.Containers))
+			sideCarCopy.Volumes = make([]corev1.Volume, len(sideCar.Volumes))
 
-      // Apply the configured image
-      for i := range sideCar.Containers {
-        containerCopy := sideCar.Containers[i]
-        containerCopy.Image = strings.Replace(containerCopy.Image, "|SHAWARMA_IMAGE|", shawarmaImage, -1);
+			// Apply the configured image
+			for i := range sideCar.Containers {
+				containerCopy := sideCar.Containers[i]
+				containerCopy.Image = strings.Replace(containerCopy.Image, "|SHAWARMA_IMAGE|", shawarmaImage, -1)
 
-        sideCarCopy.Containers[i] = containerCopy
-      }
+				sideCarCopy.Containers[i] = containerCopy
+			}
 
-      // Apply the configured volumes
-      for i := range sideCar.Volumes {
-        volumeCopy := sideCar.Volumes[i]
+			// Apply the configured volumes
+			for i := range sideCar.Volumes {
+				volumeCopy := sideCar.Volumes[i]
 
-        if (volumeCopy.Secret != nil) {
-          volumeCopy.Secret.SecretName = strings.Replace(volumeCopy.Secret.SecretName, "|SHAWARMA_TOKEN_NAME|", mutator.ShawarmaSecretTokenName, -1);
-        }
+				if volumeCopy.Secret != nil {
+					volumeCopy.Secret.SecretName = strings.Replace(volumeCopy.Secret.SecretName, "|SHAWARMA_TOKEN_NAME|", mutator.ShawarmaSecretTokenName, -1)
+				}
 
-        sideCarCopy.Volumes[i] = volumeCopy
-      }
+				sideCarCopy.Volumes[i] = volumeCopy
+			}
 
 			containers = append(containers, sideCarCopy.Containers...)
 			volumes = append(volumes, sideCarCopy.Volumes...)
@@ -297,7 +297,7 @@ func updateAnnotation(target map[string]string, added map[string]string) []patch
 		target = map[string]string{}
 	}
 	for key, value := range added {
-    keyEscaped := strings.Replace(key, "/", "~1", -1)
+		keyEscaped := strings.Replace(key, "/", "~1", -1)
 
 		_, ok := target[key]
 		if ok {
@@ -308,8 +308,8 @@ func updateAnnotation(target map[string]string, added map[string]string) []patch
 			})
 		} else {
 			patch = append(patch, patchOperation{
-				Op:   "add",
-				Path: "/metadata/annotations/" + keyEscaped,
+				Op:    "add",
+				Path:  "/metadata/annotations/" + keyEscaped,
 				Value: value,
 			})
 		}
