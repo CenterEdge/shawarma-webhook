@@ -36,7 +36,7 @@ ENV CERT_FILE=/etc/shawarma-webhook/certs/cert.pem \
     KEY_FILE=/etc/shawarma-webhook/certs/key.pem \
     WEBHOOK_PORT=443 \
     SHAWARMA_IMAGE=centeredge/shawarma:0.1.2 \
-    SHAWARMA_SECRET_TOKEN_NAME=shawarma-token \
+    SHAWARMA_SERVICE_ACCT_NAME=shawarma \
     LOG_LEVEL=warn
 
 ENTRYPOINT [ "/etc/shawarma-webhook/shawarma-webhook" ]
