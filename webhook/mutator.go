@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
@@ -53,7 +54,16 @@ type SideCar struct {
 type Mutator struct {
 	SideCars                map[string]*SideCar
 	ShawarmaImage           string
+	ShawarmaServiceAcctName string
 	ShawarmaSecretTokenName string
+	ServiceAcctMonitors     *ServiceAcctMonitorSet
+}
+
+// Shutdown the mutator
+func (mutator Mutator) Shutdown() {
+	if mutator.ServiceAcctMonitors != nil {
+		mutator.ServiceAcctMonitors.StopAll()
+	}
 }
 
 /*Mutate function performs the actual mutation of pod spec*/
@@ -95,9 +105,9 @@ func mutate(ar *v1beta1.AdmissionReview, mutator *Mutator) *v1beta1.AdmissionRes
 		return errorResponse(ar.Request.UID, err)
 	}
 
-	if sideCarNames, ok := shouldMutate(systemNameSpaces, &pod.ObjectMeta); ok {
+	if sideCarNames, ok := shouldMutate(systemNameSpaces, &pod.ObjectMeta, req.Namespace); ok {
 		annotations := map[string]string{sideCarInjectionStatusAnnotation: injectedValue}
-		patchBytes, err := createPatch(&pod, sideCarNames, mutator, annotations)
+		patchBytes, err := createPatch(&pod, req.Namespace, sideCarNames, mutator, annotations)
 		if err != nil {
 			return errorResponse(req.UID, err)
 		}
@@ -132,10 +142,15 @@ func unMarshall(req *v1beta1.AdmissionRequest) (corev1.Pod, error) {
 	return pod, err
 }
 
-func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta) ([]string, bool) {
+func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta, namespace string) ([]string, bool) {
+	podName := metadata.Name
+	if podName == "" {
+		podName = metadata.GenerateName
+	}
+
 	for _, namespace := range ignoredList {
 		if metadata.Namespace == namespace {
-			log.Infof("Skipping mutation for [%v] in special namespace: [%v]", metadata.Name, metadata.Namespace)
+			log.Infof("Skipping mutation for [%v] in special namespace: [%v]", podName, namespace)
 			return nil, false
 		}
 	}
@@ -146,22 +161,22 @@ func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta) ([]string, 
 	}
 
 	if status, ok := annotations[sideCarInjectionStatusAnnotation]; ok && strings.ToLower(status) == injectedValue {
-		log.Infof("Skipping mutation for [%v]. Has been mutated already", metadata.Name)
+		log.Infof("Skipping mutation for [%v/%v]. Has been mutated already", namespace, podName)
 		return nil, false
 	}
 
 	if serviceName, ok := annotations[sideCarInjectionAnnotation]; ok {
 		if len(serviceName) > 0 {
-			log.Infof("shawarma injection for %v/%v: service-name: %v", metadata.Namespace, metadata.Name, serviceName)
+			log.Infof("shawarma injection for %v/%v: service-name: %v", namespace, podName, serviceName)
 			return []string{sideCarName}, true
 		}
 	}
 
-	log.Infof("Skipping mutation for [%v]. No action required", metadata.Name)
+	log.Infof("Skipping mutation for [%v/%v]. No action required", namespace, podName)
 	return nil, false
 }
 
-func createPatch(pod *corev1.Pod, sideCarNames []string, mutator *Mutator, annotations map[string]string) ([]byte, error) {
+func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutator *Mutator, annotations map[string]string) ([]byte, error) {
 
 	var patch []patchOperation
 	var containers []corev1.Container
@@ -176,6 +191,23 @@ func createPatch(pod *corev1.Pod, sideCarNames []string, mutator *Mutator, annot
 		if image, ok := existingAnnotations[sideCarInjectionImageAnnotation]; ok {
 			log.Infof("Overriding Shawarma image, using %v", image)
 			shawarmaImage = image
+		}
+	}
+
+	// Handle the secret name
+	secretName := mutator.ShawarmaSecretTokenName
+	if secretName == "" {
+		// Get the secret name from the service account
+		monitor, err := mutator.ServiceAcctMonitors.Get(namespace, mutator.ShawarmaServiceAcctName, time.Second*1)
+		if err != nil {
+			return nil, err
+		}
+
+		secretName = monitor.SecretName
+		if secretName == "" {
+			return nil, fmt.Errorf("Cannot find secret for service account %s/%s", namespace, mutator.ShawarmaServiceAcctName)
+		} else {
+			log.Debugf("Using service token %s for service account %s/%s", secretName, namespace, mutator.ShawarmaServiceAcctName)
 		}
 	}
 
@@ -199,7 +231,7 @@ func createPatch(pod *corev1.Pod, sideCarNames []string, mutator *Mutator, annot
 				volumeCopy := sideCar.Volumes[i]
 
 				if volumeCopy.Secret != nil {
-					volumeCopy.Secret.SecretName = strings.Replace(volumeCopy.Secret.SecretName, "|SHAWARMA_TOKEN_NAME|", mutator.ShawarmaSecretTokenName, -1)
+					volumeCopy.Secret.SecretName = strings.Replace(volumeCopy.Secret.SecretName, "|SHAWARMA_TOKEN_NAME|", secretName, -1)
 				}
 
 				sideCarCopy.Volumes[i] = volumeCopy

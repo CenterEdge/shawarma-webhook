@@ -7,6 +7,7 @@ import (
 
 	"github.com/CenterEdge/shawarma-webhook/httpd"
 	"github.com/CenterEdge/shawarma-webhook/routes"
+	"github.com/CenterEdge/shawarma-webhook/webhook"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -15,6 +16,7 @@ type config struct {
 	httpdConf               httpd.Conf
 	sideCarConfigFile       string
 	shawarmaImage           string
+	shawarmaServiceAcctName string
 	shawarmaSecretTokenName string
 }
 
@@ -68,9 +70,15 @@ func main() {
 			EnvVar: "SHAWARMA_IMAGE",
 		},
 		cli.StringFlag{
+			Name:   "shawarma-service-acct-name",
+			Usage:  "Name of the service account which should be used for sidecars",
+			Value:  "shawarma",
+			EnvVar: "SHAWARMA_SERVICE_ACCT_NAME",
+		},
+		cli.StringFlag{
 			Name:   "shawarma-secret-token-name",
-			Usage:  "Name of the secret containing the Kubernetes token for Shawarma",
-			Value:  "shawarma-token",
+			Usage:  "Name of the secret containing the Kubernetes token for Shawarma, overrides shawarma-service-acct-name",
+			Value:  "",
 			EnvVar: "SHAWARMA_SECRET_TOKEN_NAME",
 		},
 	}
@@ -89,6 +97,11 @@ func main() {
 
 		log.SetLevel(level)
 
+		err = webhook.InitializeServiceAcctMonitor()
+		if err != nil {
+			log.Warn(err)
+		}
+
 		return nil
 	}
 
@@ -96,8 +109,12 @@ func main() {
 		conf := readConfig(c)
 		simpleServer := httpd.NewSimpleServer(conf.httpdConf)
 
-		var err error
-		if err = addRoutes(simpleServer, conf); err != nil {
+		var (
+			mutator routes.MutatorController
+			err     error
+		)
+
+		if mutator, err = addRoutes(simpleServer, conf); err != nil {
 			return err
 		}
 
@@ -107,6 +124,7 @@ func main() {
 
 		log.Infof("Shutting down initiated")
 		simpleServer.Shutdown()
+		mutator.Shutdown()
 		return nil
 	}
 
@@ -116,22 +134,26 @@ func main() {
 	}
 }
 
-func addRoutes(simpleServer httpd.SimpleServer, conf config) error {
-	mutator, err := routes.NewMutatorController(conf.sideCarConfigFile, conf.shawarmaImage, conf.shawarmaSecretTokenName)
+func addRoutes(simpleServer httpd.SimpleServer, conf config) (routes.MutatorController, error) {
+	mutator, err := routes.NewMutatorController(
+		conf.sideCarConfigFile,
+		conf.shawarmaImage,
+		conf.shawarmaServiceAcctName,
+		conf.shawarmaSecretTokenName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	simpleServer.AddRoute("/mutate", mutator.Mutate)
 
 	health, err := routes.NewHealthController()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	simpleServer.AddRoute("/health", health.Health)
 
-	return nil
+	return mutator, nil
 }
 
 func readConfig(c *cli.Context) config {
@@ -142,6 +164,7 @@ func readConfig(c *cli.Context) config {
 	conf.httpdConf.KeyFile = c.String("key-file")
 	conf.sideCarConfigFile = c.String("config")
 	conf.shawarmaImage = c.String("shawarma-image")
+	conf.shawarmaServiceAcctName = c.String("shawarma-service-acct-name")
 	conf.shawarmaSecretTokenName = c.String("shawarma-secret-token-name")
 
 	return conf

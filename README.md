@@ -13,6 +13,22 @@ Note that the sample uses predefined, publicly available certificates to secure 
 the Kubernetes API Server and the webhook. For production, these certificates should be replaced with
 secure, locally generated certificates.
 
+## RBAC Rights
+
+If using `SHAWARMA_SERVICE_ACCT_NAME` (the default), the webhook needs the following RBAC rights bound to
+the webhook's service account.
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: shawarma-webhook
+rules:
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  verbs: ["get", "watch", "list"]
+```
+
 ## Environment Variables
 
 The following environment variables may be used to customize behaviors of the webhook.
@@ -24,7 +40,8 @@ The following environment variables may be used to customize behaviors of the we
 | CERT_FILE                  | /etc/shawarma-webhook/certs/cert.pem | Certificate file used for TLS by the admission webhook |
 | KEY_FILE                   | /etc/shawarma-webhook/certs/key.pem  | Key file used for TLS by the admission webhook |
 | SWAWARMA_IMAGE             | centeredge/shawarma:0.1.2            | Default Shawarma image |
-| SHAWARMA_SECRET_TOKEN_NAME | shawarma-token                       | Name of the K8S Secret containing the Shwarma token |
+| SHAWARMA_SERVICE_ACCT_NAME | shawarma                             | Name of the service account which should be used for sidecars |
+| SHAWARMA_SECRET_TOKEN_NAME |                                      | Name of the secret containing the Kubernetes token for Shawarma, overrides SHAWARMA_SERVICE_ACCT_NAME |
 
 ## Annotations
 

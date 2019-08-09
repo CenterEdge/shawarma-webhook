@@ -45,17 +45,20 @@ func loadConfig(sideCarConfigFile string) (map[string]*webhook.SideCar, error) {
 
 /*MutatorController is an interface that implements mutation method*/
 type MutatorController interface {
+	Shutdown()
 	Mutate(http.ResponseWriter, *http.Request)
 }
 
 /*NewMutatorController is a factory method to create an instance of MutatorController*/
-func NewMutatorController(sideCarConfigFile string, shawarmaImage string, shawarmaSecretTokenName string) (MutatorController, error) {
+func NewMutatorController(sideCarConfigFile string, shawarmaImage string, shawarmaServiceAcctName string, shawarmaSecretTokenName string) (MutatorController, error) {
 	mapOfSideCars, err := loadConfig(sideCarConfigFile)
 	if mapOfSideCars != nil {
 		mutator := webhook.Mutator{
 			SideCars:                mapOfSideCars,
 			ShawarmaImage:           shawarmaImage,
+			ShawarmaServiceAcctName: shawarmaServiceAcctName,
 			ShawarmaSecretTokenName: shawarmaSecretTokenName,
+			ServiceAcctMonitors:     &webhook.ServiceAcctMonitorSet{},
 		}
 
 		return mutatorController{mutator: mutator}, nil
@@ -65,6 +68,10 @@ func NewMutatorController(sideCarConfigFile string, shawarmaImage string, shawar
 
 type mutatorController struct {
 	mutator webhook.Mutator
+}
+
+func (controller mutatorController) Shutdown() {
+	controller.mutator.Shutdown()
 }
 
 func (controller mutatorController) Mutate(writer http.ResponseWriter, request *http.Request) {
