@@ -1,6 +1,6 @@
 # Shawarma Webhook
 
-[![Build Status](https://travis-ci.org/CenterEdge/shawarma-webhook.svg?branch=master)](https://travis-ci.org/CenterEdge/shawarma-webhook)
+[![ci](https://github.com/CenterEdge/shawarma-webhook/actions/workflows/docker-image.yml/badge.svg)](https://github.com/CenterEdge/shawarma-webhook/actions/workflows/docker-image.yml)
 
 A Kubernetes Mutating Admision Webhook which will automatically apply the Shawarma sidecar when requested via annotations.
 
