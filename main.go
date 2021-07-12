@@ -30,7 +30,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "Shawarma Webhook"
 	app.Usage = "Kubernetes Mutating Admission Webhook to add the Shawarma sidecar when requested by annotations"
-	app.Copyright = "(c) 2019 CenterEdge Software"
+	app.Copyright = "(c) 2019-2021 CenterEdge Software"
 	app.Version = version
 
 	app.Flags = []cli.Flag{
@@ -49,13 +49,13 @@ func main() {
 		cli.StringFlag{
 			Name:   "cert-file",
 			Usage:  "File containing the TLS certificate (PEM encoded)",
-			Value:  "./certs/cert.pem",
+			Value:  "./certs/tls.crt",
 			EnvVar: "CERT_FILE",
 		},
 		cli.StringFlag{
 			Name:   "key-file",
 			Usage:  "File containing the TLS private key (PEM encoded)",
-			Value:  "./certs/key.pem",
+			Value:  "./certs/tls.key",
 			EnvVar: "KEY_FILE",
 		},
 		cli.StringFlag{
