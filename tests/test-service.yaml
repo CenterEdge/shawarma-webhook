@@ -38,6 +38,7 @@ spec:
         app: shawarma-test
       annotations:
         shawarma.centeredge.io/service-name: shawarma-test
+        shawarma.centeredge.io/log-level: debug
     spec:
       containers:
       - name: shawarma-test
