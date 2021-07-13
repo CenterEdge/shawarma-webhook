@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shawarma-test
+  labels:
+    shawarma-injection: enabled
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shawarma
+  namespace: shawarma-test
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: shawarma-webhook
+rules:
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: shawarma
+subjects:
+- kind: ServiceAccount
+  name: shawarma-webhook
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: shawarma-webhook
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shawarma-webhook
+  namespace: kube-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shawarma-webhook
+  namespace: kube-system
+  labels:
+    k8s-app: shawarma-webhook
+spec:
+  type: ClusterIP
+  ports:
+  - name: https
+    port: 443
+    targetPort: https
+    protocol: TCP
+  selector:
+    k8s-app: shawarma-webhook
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: shawarma-webhook
+  namespace: kube-system
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: shawarma-webhook
+  namespace: kube-system
+spec:
+  secretName: shawarma-webhook-certificate
+  dnsNames:
+  - shawarma-webhook
+  - shawarma-webhook.kube-system
+  - shawarma-webhook.kube-system.svc
+  issuerRef:
+    name: shawarma-webhook
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: shawarma-webhook
+  labels:
+    k8s-app: shawarma-webhook
+  annotations:
+    cert-manager.io/inject-ca-from: kube-system/shawarma-webhook
+webhooks:
+- name: "webhook.shawarma.centeredge.io"
+  failurePolicy: Fail # For testing purposes, let's be strict
+  rules:
+  - operations: [ "CREATE" ]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+  namespaceSelector:
+    matchExpressions:
+    - key: shawarma-injection
+      operator: In
+      values: ["enabled"]
+  clientConfig:
+    service:
+      name: shawarma-webhook
+      namespace: kube-system
+      path: "/mutate"
+  admissionReviewVersions: ["v1beta1"]
+  sideEffects: None
