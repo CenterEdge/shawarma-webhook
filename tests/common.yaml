@@ -104,5 +104,5 @@ webhooks:
       name: shawarma-webhook
       namespace: kube-system
       path: "/mutate"
-  admissionReviewVersions: ["v1beta1"]
+  admissionReviewVersions: ["v1beta1", "v1"]
   sideEffects: None

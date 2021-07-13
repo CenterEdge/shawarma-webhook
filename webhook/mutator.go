@@ -7,12 +7,15 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/admission/v1"
 	"k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
 var (
@@ -37,6 +40,11 @@ const (
 	sideCarName                      = "shawarma"
 )
 
+// unversionedAdmissionReview is used to decode both v1 and v1beta1 AdmissionReview types.
+type unversionedAdmissionReview struct {
+	v1.AdmissionReview
+}
+
 type patchOperation struct {
 	Op    string      `json:"op"`
 	Path  string      `json:"path"`
@@ -59,6 +67,11 @@ type Mutator struct {
 	ServiceAcctMonitors     *ServiceAcctMonitorSet
 }
 
+func Init() {
+	utilruntime.Must(v1.AddToScheme(runtimeScheme))
+	utilruntime.Must(v1beta1.AddToScheme(runtimeScheme))
+}
+
 // Shutdown the mutator
 func (mutator Mutator) Shutdown() {
 	if mutator.ServiceAcctMonitors != nil {
@@ -68,13 +81,23 @@ func (mutator Mutator) Shutdown() {
 
 /*Mutate function performs the actual mutation of pod spec*/
 func (mutator Mutator) Mutate(req []byte) ([]byte, error) {
-	admissionReviewResp := v1beta1.AdmissionReview{}
-	admissionReviewReq := v1beta1.AdmissionReview{}
-	var admissionResponse *v1beta1.AdmissionResponse
+	admissionReviewResp := v1.AdmissionReview{}
+	admissionReviewReq := v1.AdmissionRequest{}
+	var admissionResponse *v1.AdmissionResponse
 
-	_, _, err := deserializer.Decode(req, nil, &admissionReviewReq)
+	// Both v1 and v1beta1 AdmissionReview types are exactly the same, so the v1beta1 type can
+	// be decoded into the v1 type. However the runtime codec's decoder guesses which type to
+	// decode into by type name if an Object's TypeMeta isn't set. By setting TypeMeta of an
+	// unregistered type to the v1 GVK, the decoder will coerce a v1beta1 AdmissionReview to v1.
+	// The actual AdmissionReview GVK will be used to write a typed response in case the
+	// webhook config permits multiple versions, otherwise this response will fail.
+	ar := unversionedAdmissionReview{}
+	// avoid an extra copy
+	ar.Request = &admissionReviewReq
+	ar.SetGroupVersionKind(v1.SchemeGroupVersion.WithKind("AdmissionReview"))
+	_, actualGVK, err := deserializer.Decode(req, nil, &ar)
 
-	if err == nil && admissionReviewReq.Request != nil {
+	if err == nil && ar.Request != nil {
 		admissionResponse = mutate(&admissionReviewReq, &mutator)
 	} else {
 		message := "Failed to decode request"
@@ -83,7 +106,7 @@ func (mutator Mutator) Mutate(req []byte) ([]byte, error) {
 			message = fmt.Sprintf("message: %s err: %v", message, err)
 		}
 
-		admissionResponse = &v1beta1.AdmissionResponse{
+		admissionResponse = &v1.AdmissionResponse{
 			Result: &metav1.Status{
 				Message: message,
 			},
@@ -91,18 +114,25 @@ func (mutator Mutator) Mutate(req []byte) ([]byte, error) {
 	}
 
 	admissionReviewResp.Response = admissionResponse
+
+	// Default to a v1 AdmissionReview, otherwise the API server may not recognize the request
+	// if multiple AdmissionReview versions are permitted by the webhook config.
+	if actualGVK == nil || *actualGVK == (schema.GroupVersionKind{}) {
+		admissionReviewResp.SetGroupVersionKind(v1.SchemeGroupVersion.WithKind("AdmissionReview"))
+	} else {
+		admissionReviewResp.SetGroupVersionKind(*actualGVK)
+	}
+
 	return json.Marshal(admissionReviewResp)
 }
 
-func mutate(ar *v1beta1.AdmissionReview, mutator *Mutator) *v1beta1.AdmissionResponse {
-	req := ar.Request
-
+func mutate(req *v1.AdmissionRequest, mutator *Mutator) *v1.AdmissionResponse {
 	log.Infof("AdmissionReview for Kind=%v, Namespace=%v Name=%v UID=%v patchOperation=%v UserInfo=%v",
 		req.Kind, req.Namespace, req.Name, req.UID, req.Operation, req.UserInfo)
 
 	pod, err := unMarshall(req)
 	if err != nil {
-		return errorResponse(ar.Request.UID, err)
+		return errorResponse(req.UID, err)
 	}
 
 	if sideCarNames, ok := shouldMutate(systemNameSpaces, &pod.ObjectMeta, req.Namespace); ok {
@@ -113,8 +143,8 @@ func mutate(ar *v1beta1.AdmissionReview, mutator *Mutator) *v1beta1.AdmissionRes
 		}
 
 		log.Infof("AdmissionResponse: Patch: %v\n", string(patchBytes))
-		pt := v1beta1.PatchTypeJSONPatch
-		return &v1beta1.AdmissionResponse{
+		pt := v1.PatchTypeJSONPatch
+		return &v1.AdmissionResponse{
 			UID:       req.UID,
 			Allowed:   true,
 			Patch:     patchBytes,
@@ -122,21 +152,21 @@ func mutate(ar *v1beta1.AdmissionReview, mutator *Mutator) *v1beta1.AdmissionRes
 		}
 	}
 
-	return &v1beta1.AdmissionResponse{
+	return &v1.AdmissionResponse{
 		Allowed: true,
 	}
 }
 
-func errorResponse(uid types.UID, err error) *v1beta1.AdmissionResponse {
+func errorResponse(uid types.UID, err error) *v1.AdmissionResponse {
 	log.Errorf("AdmissionReview failed : [%v] %s", uid, err)
-	return &v1beta1.AdmissionResponse{
+	return &v1.AdmissionResponse{
 		Result: &metav1.Status{
 			Message: err.Error(),
 		},
 	}
 }
 
-func unMarshall(req *v1beta1.AdmissionRequest) (corev1.Pod, error) {
+func unMarshall(req *v1.AdmissionRequest) (corev1.Pod, error) {
 	var pod corev1.Pod
 	err := json.Unmarshal(req.Object.Raw, &pod)
 	return pod, err
