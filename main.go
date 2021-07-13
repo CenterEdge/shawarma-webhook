@@ -66,7 +66,7 @@ func main() {
 		cli.StringFlag{
 			Name:   "shawarma-image",
 			Usage:  "Default Docker image",
-			Value:  "centeredge/shawarma:0.1.2",
+			Value:  "centeredge/shawarma:1.0.0",
 			EnvVar: "SHAWARMA_IMAGE",
 		},
 		cli.StringFlag{
