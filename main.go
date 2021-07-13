@@ -109,6 +109,8 @@ func main() {
 		conf := readConfig(c)
 		simpleServer := httpd.NewSimpleServer(conf.httpdConf)
 
+		webhook.Init()
+
 		var (
 			mutator routes.MutatorController
 			err     error
