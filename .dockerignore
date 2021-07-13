@@ -2,3 +2,4 @@
 shawarma-webhook
 *.exe
 sample/
+tests/
