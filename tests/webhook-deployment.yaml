@@ -31,7 +31,7 @@ spec:
         image: centeredge/shawarma-webhook:test-001
         env:
         - name: LOG_LEVEL
-          value: warn
+          value: debug
         - name: SHAWARMA_IMAGE
           value: centeredge/shawarma:0.1.3
         ports:
