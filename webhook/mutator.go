@@ -30,7 +30,7 @@ var (
 
 const (
 	sideCarNameSpace                 = "shawarma.centeredge.io/"
-	injectAnnotation                 = "service-name"
+	injectAnnotation                 = "service-label"
 	imageAnnotation                  = "image"
 	statusAnnotation                 = "status"
 	sideCarInjectionAnnotation       = sideCarNameSpace + injectAnnotation
@@ -195,9 +195,9 @@ func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta, namespace s
 		return nil, false
 	}
 
-	if serviceName, ok := annotations[sideCarInjectionAnnotation]; ok {
-		if len(serviceName) > 0 {
-			log.Infof("shawarma injection for %v/%v: service-name: %v", namespace, podName, serviceName)
+	if serviceLabel, ok := annotations[sideCarInjectionAnnotation]; ok {
+		if len(serviceLabel) > 0 {
+			log.Infof("shawarma injection for %v/%v: service-label: %v", namespace, podName, serviceLabel)
 			return []string{sideCarName}, true
 		}
 	}
