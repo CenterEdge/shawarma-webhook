@@ -251,7 +251,8 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 			// Apply the configured image
 			for i := range sideCar.Containers {
 				containerCopy := sideCar.Containers[i]
-				containerCopy.Image = strings.Replace(containerCopy.Image, "|SHAWARMA_IMAGE|", shawarmaImage, -1)
+				log.Debugf("Using image %v for container %v", shawarmaImage, containerCopy.Name)
+				containerCopy.Image = shawarmaImage
 
 				sideCarCopy.Containers[i] = containerCopy
 			}
@@ -261,7 +262,8 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 				volumeCopy := sideCar.Volumes[i]
 
 				if volumeCopy.Secret != nil {
-					volumeCopy.Secret.SecretName = strings.Replace(volumeCopy.Secret.SecretName, "|SHAWARMA_TOKEN_NAME|", secretName, -1)
+					log.Debugf("Updating non-nil volume secret name %v to new secret name %v", volumeCopy.Secret.SecretName, secretName)
+					volumeCopy.Secret.SecretName = secretName
 				}
 
 				sideCarCopy.Volumes[i] = volumeCopy
