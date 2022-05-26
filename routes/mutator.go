@@ -8,19 +8,19 @@ import (
 	"net/http"
 
 	"github.com/CenterEdge/shawarma-webhook/webhook"
-	"github.com/ghodss/yaml"
 	log "github.com/sirupsen/logrus"
+	"sigs.k8s.io/yaml"
 )
 
 /*SideCars is an array of named SideCar instances*/
 type SideCars struct {
-	Sidecars []SideCar `yaml:"sidecars"`
+	Sidecars []SideCar `json:"sidecars"`
 }
 
 /*SideCar is a named sidecar to be injected*/
 type SideCar struct {
-	Name    string          `yaml:"name"`
-	Sidecar webhook.SideCar `yaml:"sidecar"`
+	Name    string          `json:"name"`
+	Sidecar webhook.SideCar `json:"sidecar"`
 }
 
 func loadConfig(sideCarConfigFile string) (map[string]*webhook.SideCar, error) {
