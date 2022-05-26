@@ -9,7 +9,7 @@ import (
 	"github.com/CenterEdge/shawarma-webhook/routes"
 	"github.com/CenterEdge/shawarma-webhook/webhook"
 	log "github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
+	cli "github.com/urfave/cli/v2"
 )
 
 type config struct {
@@ -32,54 +32,58 @@ func main() {
 	app.Usage = "Kubernetes Mutating Admission Webhook to add the Shawarma sidecar when requested by annotations"
 	app.Copyright = "(c) 2019-2021 CenterEdge Software"
 	app.Version = version
+	app.HideHelpCommand = true
 
 	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:   "log-level, l",
-			Usage:  "Set the log level (panic, fatal, error, warn, info, debug, trace)",
-			Value:  "warn",
-			EnvVar: "LOG_LEVEL",
+		&cli.StringFlag{
+			Name:    "log-level",
+			Aliases: []string{"l"},
+			Usage:   "Set the log level (panic, fatal, error, warn, info, debug, trace)",
+			Value:   "warn",
+			EnvVars: []string{"LOG_LEVEL"},
 		},
-		cli.IntFlag{
-			Name:   "port, p",
-			Usage:  "Set the listening port number",
-			Value:  443,
-			EnvVar: "WEBHOOK_PORT",
+		&cli.IntFlag{
+			Name:    "port",
+			Aliases: []string{"p"},
+			Usage:   "Set the listening port number",
+			Value:   443,
+			EnvVars: []string{"WEBHOOK_PORT"},
 		},
-		cli.StringFlag{
-			Name:   "cert-file",
-			Usage:  "File containing the TLS certificate (PEM encoded)",
-			Value:  "./certs/tls.crt",
-			EnvVar: "CERT_FILE",
+		&cli.StringFlag{
+			Name:    "cert-file",
+			Usage:   "File containing the TLS certificate (PEM encoded)",
+			Value:   "./certs/tls.crt",
+			EnvVars: []string{"CERT_FILE"},
 		},
-		cli.StringFlag{
-			Name:   "key-file",
-			Usage:  "File containing the TLS private key (PEM encoded)",
-			Value:  "./certs/tls.key",
-			EnvVar: "KEY_FILE",
+		&cli.StringFlag{
+			Name:    "key-file",
+			Usage:   "File containing the TLS private key (PEM encoded)",
+			Value:   "./certs/tls.key",
+			EnvVars: []string{"KEY_FILE"},
 		},
-		cli.StringFlag{
-			Name:  "config, c",
-			Usage: "File containing the sidecar configuration",
-			Value: "./sidecar.yaml",
+		&cli.StringFlag{
+			Name:    "config",
+			Aliases: []string{"c"},
+			Usage:   "File containing the sidecar configuration",
+			Value:   "./sidecar.yaml",
 		},
-		cli.StringFlag{
-			Name:   "shawarma-image",
-			Usage:  "Default Docker image",
-			Value:  "centeredge/shawarma:1.0.0",
-			EnvVar: "SHAWARMA_IMAGE",
+		&cli.StringFlag{
+			Name:    "shawarma-image",
+			Usage:   "Default Docker image",
+			Value:   "centeredge/shawarma:1.0.0",
+			EnvVars: []string{"SHAWARMA_IMAGE"},
 		},
-		cli.StringFlag{
-			Name:   "shawarma-service-acct-name",
-			Usage:  "Name of the service account which should be used for sidecars",
-			Value:  "shawarma",
-			EnvVar: "SHAWARMA_SERVICE_ACCT_NAME",
+		&cli.StringFlag{
+			Name:    "shawarma-service-acct-name",
+			Usage:   "Name of the service account which should be used for sidecars",
+			Value:   "shawarma",
+			EnvVars: []string{"SHAWARMA_SERVICE_ACCT_NAME"},
 		},
-		cli.StringFlag{
-			Name:   "shawarma-secret-token-name",
-			Usage:  "Name of the secret containing the Kubernetes token for Shawarma, overrides shawarma-service-acct-name",
-			Value:  "",
-			EnvVar: "SHAWARMA_SECRET_TOKEN_NAME",
+		&cli.StringFlag{
+			Name:    "shawarma-secret-token-name",
+			Usage:   "Name of the secret containing the Kubernetes token for Shawarma, overrides shawarma-service-acct-name",
+			Value:   "",
+			EnvVars: []string{"SHAWARMA_SECRET_TOKEN_NAME"},
 		},
 	}
 
