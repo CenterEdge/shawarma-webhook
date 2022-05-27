@@ -46,9 +46,10 @@ The following environment variables may be used to customize behaviors of the we
 
 The following annotations may be applied to alter behaviors on a specific pod.
 
-| Name                                  | Required | Description |
-| ------------------------------------- | -------- | ----------- |
-| `shawarma.centeredge.io/service-name` | Y        | Name of the K8S service to be monitored, the sidecar is not injected if this annotation is not present |
-| `shawarma.centeredge.io/image`        | N        | Override the image used for Shawarma |
-| `shawarma.centeredge.io/log-level`    | N        | Override the log level used by Shawarma |
-| `shawarma.centeredge.io/state-url`    | N        | Override the URL which receives Shawarma application state (default `http://localhost/applicationstate`) |
+| Name                                    | Required         | Description |
+| --------------------------------------- | ---------------- | ----------- |
+| `shawarma.centeredge.io/service-name`   | Y (if no labels) | Name of the K8S service to be monitored, the sidecar is not injected if this annotation is not present |
+| `shawarma.centeredge.io/service-labels` | Y (if no name)   | K8S service labels to monitor, comma-delimited ex. `label1=value1,label2=value2` |
+| `shawarma.centeredge.io/image`          | N                | Override the image used for Shawarma |
+| `shawarma.centeredge.io/log-level`      | N                | Override the log level used by Shawarma |
+| `shawarma.centeredge.io/state-url`      | N                | Override the URL which receives Shawarma application state (default `http://localhost/applicationstate`) |

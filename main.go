@@ -30,7 +30,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "Shawarma Webhook"
 	app.Usage = "Kubernetes Mutating Admission Webhook to add the Shawarma sidecar when requested by annotations"
-	app.Copyright = "(c) 2019-2021 CenterEdge Software"
+	app.Copyright = "(c) 2019-2022 CenterEdge Software"
 	app.Version = version
 	app.HideHelpCommand = true
 
@@ -70,7 +70,7 @@ func main() {
 		&cli.StringFlag{
 			Name:    "shawarma-image",
 			Usage:   "Default Docker image",
-			Value:   "centeredge/shawarma:1.0.0",
+			Value:   "centeredge/shawarma:1.1.0-beta003",
 			EnvVars: []string{"SHAWARMA_IMAGE"},
 		},
 		&cli.StringFlag{
