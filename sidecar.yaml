@@ -39,9 +39,9 @@ sidecars:
               fieldPath: metadata.namespace
       resources:
         requests:
-          cpu: "0.1"
-          memory: 128Mi
+          cpu: 10m
+          memory: 75Mi
         limits:
-          cpu: "0.2"
-          memory: 128Mi
+          cpu: 10m
+          memory: 75Mi
 
