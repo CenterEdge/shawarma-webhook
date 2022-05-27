@@ -24,6 +24,11 @@ sidecars:
           valueFrom:
             fieldRef:
               fieldPath: metadata.annotations['shawarma.centeredge.io/service-name']
+        - name: SHAWARMA_SERVICE_LABELS
+          # References service to monitor
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['shawarma.centeredge.io/service-labels']
         - name: SHAWARMA_URL
           # Will POST state to this URL as pod is attached/detached from the service
           valueFrom:
@@ -40,8 +45,8 @@ sidecars:
       resources:
         requests:
           cpu: 10m
-          memory: 75Mi
+          memory: 64Mi
         limits:
           cpu: 10m
-          memory: 75Mi
+          memory: 64Mi
 
