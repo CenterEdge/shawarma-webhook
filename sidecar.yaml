@@ -34,6 +34,11 @@ sidecars:
           valueFrom:
             fieldRef:
               fieldPath: metadata.annotations['shawarma.centeredge.io/state-url']
+        - name: SHAWARMA_LISTEN_PORT
+          # Will listen for HTTP GET of state on this port, localhost traffic only
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['shawarma.centeredge.io/listen-port']
         - name: MY_POD_NAME
           valueFrom:
             fieldRef:
