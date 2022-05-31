@@ -53,3 +53,4 @@ The following annotations may be applied to alter behaviors on a specific pod.
 | `shawarma.centeredge.io/image`          | N                | Override the image used for Shawarma |
 | `shawarma.centeredge.io/log-level`      | N                | Override the log level used by Shawarma |
 | `shawarma.centeredge.io/state-url`      | N                | Override the URL which receives Shawarma application state (default `http://localhost/applicationstate`) |
+| `shawarma.centeredge.io/listen-port`    | N                | Override the port on which the Shawarma sidecar listens for state requests, (default `8099`) |
