@@ -18,7 +18,8 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 
 # Copy compiled output to a fresh image
-FROM scratch
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+FROM gcr.io/distroless/static:nonroot
 WORKDIR /etc/shawarma-webhook
 
 COPY --from=build ["/app/shawarma-webhook", "/app/sidecar.yaml", "./"]
@@ -33,5 +34,6 @@ ENV CERT_FILE=/etc/shawarma-webhook/certs/tls.crt \
     SHAWARMA_SERVICE_ACCT_NAME=shawarma \
     LOG_LEVEL=warn
 
+USER 65532:65532
 ENTRYPOINT [ "/etc/shawarma-webhook/shawarma-webhook" ]
 CMD []

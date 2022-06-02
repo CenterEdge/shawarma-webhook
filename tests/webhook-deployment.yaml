@@ -21,6 +21,10 @@ spec:
         k8s-app: shawarma-webhook
     spec:
       serviceAccountName: shawarma-webhook
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        runAsNonRoot: true
       volumes:
       - name: secrets
         secret:
@@ -28,12 +32,14 @@ spec:
       containers:
       - name: shawarma-webhook
         imagePullPolicy: IfNotPresent
-        image: centeredge/shawarma-webhook:test-001
+        image: centeredge/shawarma-webhook:test
+        securityContext:
+          allowPrivilegeEscalation: false
         env:
         - name: LOG_LEVEL
           value: debug
         - name: SHAWARMA_IMAGE
-          value: centeredge/shawarma:1.1.0-beta003
+          value: centeredge/shawarma:1.1.0-beta005
         ports:
         - name: https
           containerPort: 443
