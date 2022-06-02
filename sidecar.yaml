@@ -10,6 +10,11 @@ sidecars:
     - name: shawarma
       image: "|SHAWARMA_IMAGE|"
       imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        seccompProfile:
+          type: RuntimeDefault
+        runAsNonRoot: true
       volumeMounts:
       - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
         name: shawarma-token
