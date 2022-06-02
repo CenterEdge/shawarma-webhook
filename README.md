@@ -54,3 +54,19 @@ The following annotations may be applied to alter behaviors on a specific pod.
 | `shawarma.centeredge.io/log-level`      | N                | Override the log level used by Shawarma |
 | `shawarma.centeredge.io/state-url`      | N                | Override the URL which receives Shawarma application state (default `http://localhost/applicationstate`) |
 | `shawarma.centeredge.io/listen-port`    | N                | Override the port on which the Shawarma sidecar listens for state requests, (default `8099`) |
+
+## Customizing The Sidecar
+
+The sidecar is configured via the `./sidecar.yaml` file which is included in the Docker image. It may
+add volumes and containers to pods which have the Shawarma annotations.
+
+This file may be replaced with a custom version using a volume mount. The `--config /path/to/sidecar.yaml`
+command line argument configures the location of the custom file. This can be used to change the resource
+allocations or other details of the sidecar.
+
+| Replacement Token     | Description |
+| -----------------     | ----------- |
+| `SHAWARMA_IMAGE`      | Must be in a container `image`, replaced with the configured Shawarma image |
+| `SHAWARMA_TOKEN_NAME` | Must be in a volume `secretName`, replaced with the name of the secret containing the Shawarma token for K8S API access |
+
+> For an example SIDECAR_CONFIG file, see [sidecar.yaml](./sidecar.yaml).
