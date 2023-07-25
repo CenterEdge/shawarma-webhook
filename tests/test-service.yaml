@@ -9,7 +9,7 @@ spec:
   type: ClusterIP
   ports:
   - name: http
-    port: 80
+    port: 8080
     targetPort: http
     protocol: TCP
   selector:
@@ -38,15 +38,16 @@ spec:
         app: shawarma-test
       annotations:
         shawarma.centeredge.io/service-labels: app=shawarma-test
+        shawarma.centeredge.io/state-url: http://localhost:8080/applicationstate
         shawarma.centeredge.io/log-level: debug
     spec:
       containers:
       - name: shawarma-test
         imagePullPolicy: IfNotPresent
-        image: httpd
+        image: mendhak/http-https-echo
         ports:
         - name: http
-          containerPort: 80
+          containerPort: 8080
         resources:
           requests:
             cpu: 500m
