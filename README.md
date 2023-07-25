@@ -35,7 +35,7 @@ The following environment variables may be used to customize behaviors of the we
 | Name                       | Default                              | Description |
 | -------------------------- | ------------------------------------ | ----------- |
 | LOG_LEVEL                  | warn                                 | Log level for the admission webhook |
-| WEBHOOK_PORT               | 443                                  | Port used by the admission webhook |
+| WEBHOOK_PORT               | 8443                                 | Port used by the admission webhook |
 | CERT_FILE                  | /etc/shawarma-webhook/certs/tls.crt  | Certificate file used for TLS by the admission webhook |
 | KEY_FILE                   | /etc/shawarma-webhook/certs/tls.key  | Key file used for TLS by the admission webhook |
 | SWAWARMA_IMAGE             | centeredge/shawarma:1.0.0            | Default Shawarma image |

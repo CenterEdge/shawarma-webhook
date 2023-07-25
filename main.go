@@ -46,7 +46,7 @@ func main() {
 			Name:    "port",
 			Aliases: []string{"p"},
 			Usage:   "Set the listening port number",
-			Value:   443,
+			Value:   8443,
 			EnvVars: []string{"WEBHOOK_PORT"},
 		},
 		&cli.StringFlag{

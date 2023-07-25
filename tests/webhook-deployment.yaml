@@ -42,7 +42,7 @@ spec:
           value: centeredge/shawarma:1.1.0
         ports:
         - name: https
-          containerPort: 443
+          containerPort: 8443
         volumeMounts:
         - name: secrets
           mountPath: /etc/shawarma-webhook/certs
