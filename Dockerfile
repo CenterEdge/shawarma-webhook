@@ -30,8 +30,7 @@ VOLUME [ "/tmp", "/etc/shawarma-webhook/certs" ]
 ENV CERT_FILE=/etc/shawarma-webhook/certs/tls.crt \
     KEY_FILE=/etc/shawarma-webhook/certs/tls.key \
     WEBHOOK_PORT=8443 \
-    SHAWARMA_IMAGE=centeredge/shawarma:1.1.0 \
-    SHAWARMA_SERVICE_ACCT_NAME=shawarma \
+    SHAWARMA_IMAGE=centeredge/shawarma:2.0.0-beta001 \
     LOG_LEVEL=warn
 
 USER 65532:65532
