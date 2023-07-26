@@ -40,6 +40,7 @@ const (
 	sideCarInjectionImageAnnotation  = sideCarNameSpace + imageAnnotation
 	injectedValue                    = "injected"
 	sideCarName                      = "shawarma"
+	sideCarWithTokenName             = "shawarma-withtoken"
 )
 
 // unversionedAdmissionReview is used to decode both v1 and v1beta1 AdmissionReview types.
@@ -62,7 +63,7 @@ type SideCar struct {
 
 /*Mutator is the interface for mutating webhook*/
 type Mutator struct {
-	SideCars                map[string]*SideCar
+	SideCars                map[string]SideCar
 	ShawarmaImage           string
 	ShawarmaServiceAcctName string
 	ShawarmaSecretTokenName string
@@ -137,7 +138,7 @@ func mutate(req *v1.AdmissionRequest, mutator *Mutator) *v1.AdmissionResponse {
 		return errorResponse(req.UID, err)
 	}
 
-	if sideCarNames, ok := shouldMutate(systemNameSpaces, &pod.ObjectMeta, req.Namespace); ok {
+	if sideCarNames, ok := shouldMutate(systemNameSpaces, &pod.ObjectMeta, req.Namespace, mutator); ok {
 		annotations := map[string]string{sideCarInjectionStatusAnnotation: injectedValue}
 		patchBytes, err := createPatch(&pod, req.Namespace, sideCarNames, mutator, annotations)
 		if err != nil {
@@ -174,7 +175,7 @@ func unMarshall(req *v1.AdmissionRequest) (corev1.Pod, error) {
 	return pod, err
 }
 
-func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta, namespace string) ([]string, bool) {
+func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta, namespace string, mutator *Mutator) ([]string, bool) {
 	podName := metadata.Name
 	if podName == "" {
 		podName = metadata.GenerateName
@@ -197,17 +198,23 @@ func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta, namespace s
 		return nil, false
 	}
 
+	selectedSideCarName := sideCarName
+	if mutator.ShawarmaSecretTokenName != "" || mutator.ShawarmaServiceAcctName != "" {
+		// We need to attach a token, use the alternate side car format
+		selectedSideCarName = sideCarWithTokenName
+	}
+
 	if serviceName, ok := annotations[sideCarInjectionAnnotation]; ok {
 		if len(serviceName) > 0 {
-			log.Infof("shawarma injection for %v/%v: service-name: %v", namespace, podName, serviceName)
-			return []string{sideCarName}, true
+			log.Infof("shawarma injection for %v/%v: service-name: %v sidecar: %v", namespace, podName, serviceName, selectedSideCarName)
+			return []string{selectedSideCarName}, true
 		}
 	}
 
 	if serviceLabels, ok := annotations[sideCarLabelInjectionAnnotation]; ok {
 		if len(serviceLabels) > 0 {
-			log.Infof("shawarma injection for %v/%v: service-labels: %v", namespace, podName, serviceLabels)
-			return []string{sideCarName}, true
+			log.Infof("shawarma injection for %v/%v: service-labels: %v sidecar: %v", namespace, podName, serviceLabels, selectedSideCarName)
+			return []string{selectedSideCarName}, true
 		}
 	}
 
@@ -235,7 +242,7 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 
 	// Handle the secret name
 	secretName := mutator.ShawarmaSecretTokenName
-	if secretName == "" {
+	if secretName == "" && mutator.ShawarmaServiceAcctName != "" {
 		// Get the secret name from the service account
 		monitor, err := mutator.ServiceAcctMonitors.Get(namespace, mutator.ShawarmaServiceAcctName, time.Second*1)
 		if err != nil {
@@ -252,7 +259,7 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 
 	for _, name := range sideCarNames {
 		if sideCar, ok := mutator.SideCars[name]; ok {
-			sideCarCopy := *sideCar
+			sideCarCopy := sideCar
 
 			sideCarCopy.Containers = make([]corev1.Container, len(sideCar.Containers))
 			sideCarCopy.Volumes = make([]corev1.Volume, len(sideCar.Volumes))

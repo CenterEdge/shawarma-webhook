@@ -30,7 +30,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "Shawarma Webhook"
 	app.Usage = "Kubernetes Mutating Admission Webhook to add the Shawarma sidecar when requested by annotations"
-	app.Copyright = "(c) 2019-2022 CenterEdge Software"
+	app.Copyright = "(c) 2019-2023 CenterEdge Software"
 	app.Version = version
 	app.HideHelpCommand = true
 
@@ -75,8 +75,8 @@ func main() {
 		},
 		&cli.StringFlag{
 			Name:    "shawarma-service-acct-name",
-			Usage:   "Name of the service account which should be used for sidecars",
-			Value:   "shawarma",
+			Usage:   "Name of the service account which should be used for sidecars (requires a legacy token secret linked to the service account)",
+			Value:   "",
 			EnvVars: []string{"SHAWARMA_SERVICE_ACCT_NAME"},
 		},
 		&cli.StringFlag{
@@ -101,16 +101,20 @@ func main() {
 
 		log.SetLevel(level)
 
-		err = webhook.InitializeServiceAcctMonitor()
-		if err != nil {
-			log.Warn(err)
-		}
-
 		return nil
 	}
 
 	app.Action = func(c *cli.Context) error {
 		conf := readConfig(c)
+
+		if conf.shawarmaServiceAcctName != "" {
+			// If using a service account token, startup the monitor for service accounts
+			err := webhook.InitializeServiceAcctMonitor()
+			if err != nil {
+				log.Warn(err)
+			}
+		}
+
 		simpleServer := httpd.NewSimpleServer(conf.httpdConf)
 
 		webhook.Init()

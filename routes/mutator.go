@@ -23,7 +23,7 @@ type SideCar struct {
 	Sidecar webhook.SideCar `json:"sidecar"`
 }
 
-func loadConfig(sideCarConfigFile string) (map[string]*webhook.SideCar, error) {
+func loadConfig(sideCarConfigFile string) (map[string]webhook.SideCar, error) {
 	data, err := ioutil.ReadFile(sideCarConfigFile)
 	if err != nil {
 		return nil, err
@@ -35,9 +35,9 @@ func loadConfig(sideCarConfigFile string) (map[string]*webhook.SideCar, error) {
 		return nil, err
 	}
 
-	mapOfSideCar := make(map[string]*webhook.SideCar)
+	mapOfSideCar := make(map[string]webhook.SideCar)
 	for _, configuration := range cfg.Sidecars {
-		mapOfSideCar[configuration.Name] = &configuration.Sidecar
+		mapOfSideCar[configuration.Name] = configuration.Sidecar
 	}
 
 	return mapOfSideCar, nil

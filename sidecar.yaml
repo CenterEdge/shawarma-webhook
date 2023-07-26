@@ -1,6 +1,57 @@
 sidecars:
 - name: shawarma
   sidecar:
+    containers:
+    - name: shawarma
+      image: "|SHAWARMA_IMAGE|"
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        seccompProfile:
+          type: RuntimeDefault
+        runAsNonRoot: true
+      env:
+        - name: LOG_LEVEL
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['shawarma.centeredge.io/log-level']
+        - name: SHAWARMA_SERVICE
+          # References service to monitor
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['shawarma.centeredge.io/service-name']
+        - name: SHAWARMA_SERVICE_LABELS
+          # References service to monitor
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['shawarma.centeredge.io/service-labels']
+        - name: SHAWARMA_URL
+          # Will POST state to this URL as pod is attached/detached from the service
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['shawarma.centeredge.io/state-url']
+        - name: SHAWARMA_LISTEN_PORT
+          # Will listen for HTTP GET of state on this port, localhost traffic only
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['shawarma.centeredge.io/listen-port']
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+      resources:
+        requests:
+          cpu: 25m
+          memory: 64Mi
+        limits:
+          cpu: 25m
+          memory: 64Mi
+- name: shawarma-withtoken
+  sidecar:
     volumes:
     - name: shawarma-token
       secret:
@@ -54,9 +105,8 @@ sidecars:
               fieldPath: metadata.namespace
       resources:
         requests:
-          cpu: 10m
+          cpu: 25m
           memory: 64Mi
         limits:
-          cpu: 10m
+          cpu: 25m
           memory: 64Mi
-
