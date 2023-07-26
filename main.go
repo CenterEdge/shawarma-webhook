@@ -70,7 +70,7 @@ func main() {
 		&cli.StringFlag{
 			Name:    "shawarma-image",
 			Usage:   "Default Docker image",
-			Value:   "centeredge/shawarma:1.1.0",
+			Value:   "centeredge/shawarma:2.0.0-beta001",
 			EnvVars: []string{"SHAWARMA_IMAGE"},
 		},
 		&cli.StringFlag{
