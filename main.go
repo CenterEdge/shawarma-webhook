@@ -30,7 +30,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "Shawarma Webhook"
 	app.Usage = "Kubernetes Mutating Admission Webhook to add the Shawarma sidecar when requested by annotations"
-	app.Copyright = "(c) 2019-2023 CenterEdge Software"
+	app.Copyright = "(c) 2019-2025 CenterEdge Software"
 	app.Version = version
 	app.HideHelpCommand = true
 
