@@ -1,8 +1,9 @@
-FROM --platform=$BUILDPLATFORM golang:1.20 as build
+# syntax=docker/dockerfile:1
+# check=skip=SecretsUsedInArgOrEnv
+FROM --platform=$BUILDPLATFORM golang:1.24 AS build
 
 # Install modules first for caching
 WORKDIR /app
-ENV GO111MODULE=on
 COPY go.* ./
 RUN --mount=type=cache,target=/go/pkg \
     go mod download

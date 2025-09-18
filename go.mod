@@ -1,6 +1,6 @@
 module github.com/CenterEdge/shawarma-webhook
 
-go 1.20
+go 1.24
 
 require (
 	github.com/fsnotify/fsnotify v1.6.0
