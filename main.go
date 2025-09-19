@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -9,7 +10,7 @@ import (
 	"github.com/CenterEdge/shawarma-webhook/routes"
 	"github.com/CenterEdge/shawarma-webhook/webhook"
 	log "github.com/sirupsen/logrus"
-	cli "github.com/urfave/cli/v2"
+	cli "github.com/urfave/cli/v3"
 )
 
 type config struct {
@@ -27,67 +28,67 @@ func main() {
 	log.SetOutput(os.Stdout)
 	log.SetFormatter(&log.JSONFormatter{})
 
-	app := cli.NewApp()
-	app.Name = "Shawarma Webhook"
-	app.Usage = "Kubernetes Mutating Admission Webhook to add the Shawarma sidecar when requested by annotations"
-	app.Copyright = "(c) 2019-2025 CenterEdge Software"
-	app.Version = version
-	app.HideHelpCommand = true
-
-	app.Flags = []cli.Flag{
-		&cli.StringFlag{
-			Name:    "log-level",
-			Aliases: []string{"l"},
-			Usage:   "Set the log level (panic, fatal, error, warn, info, debug, trace)",
-			Value:   "warn",
-			EnvVars: []string{"LOG_LEVEL"},
-		},
-		&cli.IntFlag{
-			Name:    "port",
-			Aliases: []string{"p"},
-			Usage:   "Set the listening port number",
-			Value:   8443,
-			EnvVars: []string{"WEBHOOK_PORT"},
-		},
-		&cli.StringFlag{
-			Name:    "cert-file",
-			Usage:   "File containing the TLS certificate (PEM encoded)",
-			Value:   "./certs/tls.crt",
-			EnvVars: []string{"CERT_FILE"},
-		},
-		&cli.StringFlag{
-			Name:    "key-file",
-			Usage:   "File containing the TLS private key (PEM encoded)",
-			Value:   "./certs/tls.key",
-			EnvVars: []string{"KEY_FILE"},
-		},
-		&cli.StringFlag{
-			Name:    "config",
-			Aliases: []string{"c"},
-			Usage:   "File containing the sidecar configuration",
-			Value:   "./sidecar.yaml",
-		},
-		&cli.StringFlag{
-			Name:    "shawarma-image",
-			Usage:   "Default Docker image",
-			Value:   "centeredge/shawarma:2.0.0-beta001",
-			EnvVars: []string{"SHAWARMA_IMAGE"},
-		},
-		&cli.StringFlag{
-			Name:    "shawarma-service-acct-name",
-			Usage:   "Name of the service account which should be used for sidecars (requires a legacy token secret linked to the service account)",
-			Value:   "",
-			EnvVars: []string{"SHAWARMA_SERVICE_ACCT_NAME"},
-		},
-		&cli.StringFlag{
-			Name:    "shawarma-secret-token-name",
-			Usage:   "Name of the secret containing the Kubernetes token for Shawarma, overrides shawarma-service-acct-name",
-			Value:   "",
-			EnvVars: []string{"SHAWARMA_SECRET_TOKEN_NAME"},
+	app := cli.Command{
+		Name:            "Shawarma Webhook",
+		Usage:           "Kubernetes Mutating Admission Webhook to add the Shawarma sidecar when requested by annotations",
+		Copyright:       "(c) 2019-2025 CenterEdge Software",
+		Version:         version,
+		HideHelpCommand: true,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "log-level",
+				Aliases: []string{"l"},
+				Usage:   "Set the log level (panic, fatal, error, warn, info, debug, trace)",
+				Value:   "warn",
+				Sources: cli.EnvVars("LOG_LEVEL"),
+			},
+			&cli.Uint16Flag{
+				Name:    "port",
+				Aliases: []string{"p"},
+				Usage:   "Set the listening port number",
+				Value:   8443,
+				Sources: cli.EnvVars("WEBHOOK_PORT"),
+			},
+			&cli.StringFlag{
+				Name:    "cert-file",
+				Usage:   "File containing the TLS certificate (PEM encoded)",
+				Value:   "./certs/tls.crt",
+				Sources: cli.EnvVars("CERT_FILE"),
+			},
+			&cli.StringFlag{
+				Name:    "key-file",
+				Usage:   "File containing the TLS private key (PEM encoded)",
+				Value:   "./certs/tls.key",
+				Sources: cli.EnvVars("KEY_FILE"),
+			},
+			&cli.StringFlag{
+				Name:    "config",
+				Aliases: []string{"c"},
+				Usage:   "File containing the sidecar configuration",
+				Value:   "./sidecar.yaml",
+			},
+			&cli.StringFlag{
+				Name:    "shawarma-image",
+				Usage:   "Default Docker image",
+				Value:   "centeredge/shawarma:2.0.0-beta001",
+				Sources: cli.EnvVars("SHAWARMA_IMAGE"),
+			},
+			&cli.StringFlag{
+				Name:    "shawarma-service-acct-name",
+				Usage:   "Name of the service account which should be used for sidecars (requires a legacy token secret linked to the service account)",
+				Value:   "",
+				Sources: cli.EnvVars("SHAWARMA_SERVICE_ACCT_NAME"),
+			},
+			&cli.StringFlag{
+				Name:    "shawarma-secret-token-name",
+				Usage:   "Name of the secret containing the Kubernetes token for Shawarma, overrides shawarma-service-acct-name",
+				Value:   "",
+				Sources: cli.EnvVars("SHAWARMA_SECRET_TOKEN_NAME"),
+			},
 		},
 	}
 
-	app.Before = func(c *cli.Context) error {
+	app.Before = func(ctx context.Context, c *cli.Command) (context.Context, error) {
 		// In case of empty environment variable, pull default here too
 		levelString := c.String("log-level")
 		if levelString == "" {
@@ -96,15 +97,15 @@ func main() {
 
 		level, err := log.ParseLevel(levelString)
 		if err != nil {
-			return err
+			return ctx, err
 		}
 
 		log.SetLevel(level)
 
-		return nil
+		return ctx, nil
 	}
 
-	app.Action = func(c *cli.Context) error {
+	app.Action = func(ctx context.Context, c *cli.Command) error {
 		conf := readConfig(c)
 
 		if conf.shawarmaServiceAcctName != "" {
@@ -138,7 +139,7 @@ func main() {
 		return nil
 	}
 
-	err := app.Run(os.Args)
+	err := app.Run(context.Background(), os.Args)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -166,10 +167,10 @@ func addRoutes(simpleServer httpd.SimpleServer, conf config) (routes.MutatorCont
 	return mutator, nil
 }
 
-func readConfig(c *cli.Context) config {
+func readConfig(c *cli.Command) config {
 	var conf config
 
-	conf.httpdConf.Port = c.Int("port")
+	conf.httpdConf.Port = c.Uint16("port")
 	conf.httpdConf.CertFile = c.String("cert-file")
 	conf.httpdConf.KeyFile = c.String("key-file")
 	conf.sideCarConfigFile = c.String("config")

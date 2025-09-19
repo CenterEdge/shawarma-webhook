@@ -12,7 +12,7 @@ import (
 
 /*Conf is the required config to create httpd server*/
 type Conf struct {
-	Port     int
+	Port     uint16
 	CertFile string
 	KeyFile  string
 }
@@ -22,13 +22,10 @@ type Route func(http.ResponseWriter, *http.Request)
 
 /*SimpleServer is a simple http server supporting TLS*/
 type SimpleServer interface {
-	Port() int
+	Port() uint16
 	AddRoute(string, Route)
 	Start(chan error)
 	Shutdown()
-}
-
-type certManLogger struct {
 }
 
 /*NewSimpleServer is a factory function to create an instance of SimpleServer*/
@@ -53,7 +50,7 @@ type simpleServerImpl struct {
 	keyPair *tls.Certificate
 }
 
-func (s *simpleServerImpl) Port() int {
+func (s *simpleServerImpl) Port() uint16 {
 	return s.conf.Port
 }
 
