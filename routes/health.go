@@ -1,8 +1,9 @@
 package routes
 
 import (
-	"fmt"
 	"net/http"
+
+	"go.uber.org/zap"
 )
 
 /*HealthController is an interface that implements mutation method*/
@@ -11,11 +12,12 @@ type HealthController interface {
 }
 
 /*NewHealthController is a factory method to create an instance of HealthController*/
-func NewHealthController() (HealthController, error) {
-	return healthController{}, nil
+func NewHealthController(logger *zap.Logger) (HealthController, error) {
+	return healthController{logger: logger}, nil
 }
 
 type healthController struct {
+	logger *zap.Logger
 }
 
 func (controller healthController) Health(writer http.ResponseWriter, request *http.Request) {
@@ -24,6 +26,6 @@ func (controller healthController) Health(writer http.ResponseWriter, request *h
 	}
 
 	if _, err := writer.Write([]byte("Healthy")); err != nil {
-		writeError(writer, fmt.Sprintf("Failed to write response: %v", err), http.StatusInternalServerError)
+		writeError(writer, controller.logger, "Failed to write response", err, http.StatusInternalServerError)
 	}
 }

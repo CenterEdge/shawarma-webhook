@@ -5,9 +5,12 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 /*Conf is the required config to create httpd server*/
@@ -15,6 +18,7 @@ type Conf struct {
 	Port     uint16
 	CertFile string
 	KeyFile  string
+	Logger   *zap.Logger
 }
 
 /*Route is the signature of the route handler*/
@@ -22,9 +26,9 @@ type Route func(http.ResponseWriter, *http.Request)
 
 /*SimpleServer is a simple http server supporting TLS*/
 type SimpleServer interface {
-	Port() uint16
 	AddRoute(string, Route)
 	Start(chan error)
+	StartAndWait() error
 	Shutdown()
 }
 
@@ -50,10 +54,6 @@ type simpleServerImpl struct {
 	keyPair *tls.Certificate
 }
 
-func (s *simpleServerImpl) Port() uint16 {
-	return s.conf.Port
-}
-
 func (s *simpleServerImpl) AddRoute(pattern string, route Route) {
 	s.mux.HandleFunc(pattern, route)
 }
@@ -62,7 +62,8 @@ func (s *simpleServerImpl) Start(errs chan error) {
 	certWatcher, err := NewFileWatcher(s.conf.CertFile, func() {
 		err := s.load()
 		if err != nil {
-			log.Error("Error loading certificate %s", err)
+			s.conf.Logger.Error("Error loading certificate", 
+				zap.Error(err))
 		}
 	})
 	if err != nil {
@@ -74,7 +75,8 @@ func (s *simpleServerImpl) Start(errs chan error) {
 	keyWatcher, err := NewFileWatcher(s.conf.KeyFile, func() {
 		err := s.load()
 		if err != nil {
-			log.Error("Error loading certificate %s", err)
+			s.conf.Logger.Error("Error loading key", 
+				zap.Error(err))
 		}
 	})
 	if err != nil {
@@ -100,6 +102,33 @@ func (s *simpleServerImpl) Start(errs chan error) {
 	}()
 }
 
+func (s *simpleServerImpl) StartAndWait() error {
+	errC := make(chan error, 1)
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	defer func() {
+		close(errC)
+		close(signalChan)
+	}()
+
+	s.conf.Logger.Info("SimpleServer starting to listen",
+		zap.Uint16("port", s.conf.Port))
+
+	s.Start(errC)
+
+	// block until an error or signal from os to
+	// terminate the process
+	var retErr error
+	select {
+	case err := <-errC:
+		retErr = err
+	case <-signalChan:
+	}
+
+	return retErr
+}
+
 func (s *simpleServerImpl) Shutdown() {
 	s.server.Shutdown(context.Background())
 
@@ -120,7 +149,7 @@ func (s *simpleServerImpl) load() error {
 		s.certMutex.Lock()
 		s.keyPair = &keyPair
 		s.certMutex.Unlock()
-		log.Info("Certificate and key loaded")
+		s.conf.Logger.Info("Certificate and key loaded")
 	}
 	return err
 }

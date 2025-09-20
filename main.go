@@ -3,14 +3,12 @@ package main
 import (
 	"context"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/CenterEdge/shawarma-webhook/httpd"
 	"github.com/CenterEdge/shawarma-webhook/routes"
 	"github.com/CenterEdge/shawarma-webhook/webhook"
-	log "github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
+	"go.uber.org/zap"
 )
 
 type config struct {
@@ -25,8 +23,12 @@ type config struct {
 var version string
 
 func main() {
-	log.SetOutput(os.Stdout)
-	log.SetFormatter(&log.JSONFormatter{})
+	logLevel := zap.NewAtomicLevelAt(zap.WarnLevel)
+	logConfig := zap.NewProductionConfig()
+	logConfig.Level = logLevel
+
+	logger := zap.Must(logConfig.Build())
+	defer logger.Sync() // flushes buffer, if any
 
 	app := cli.Command{
 		Name:            "Shawarma Webhook",
@@ -86,33 +88,30 @@ func main() {
 				Sources: cli.EnvVars("SHAWARMA_SECRET_TOKEN_NAME"),
 			},
 		},
-	}
+		Before: func(ctx context.Context, c *cli.Command) (context.Context, error) {
+			// In case of empty environment variable, pull default here too
+			levelString := c.String("log-level")
+			if levelString != "" {
+				if level, err := zap.ParseAtomicLevel(levelString); err == nil {
+					logLevel.SetLevel(level.Level())
+				} else {
+					return ctx, err
+				}
+			}
 
-	app.Before = func(ctx context.Context, c *cli.Command) (context.Context, error) {
-		// In case of empty environment variable, pull default here too
-		levelString := c.String("log-level")
-		if levelString == "" {
-			levelString = "warn"
-		}
-
-		level, err := log.ParseLevel(levelString)
-		if err != nil {
-			return ctx, err
-		}
-
-		log.SetLevel(level)
-
-		return ctx, nil
+			return ctx, nil
+		},
 	}
 
 	app.Action = func(ctx context.Context, c *cli.Command) error {
-		conf := readConfig(c)
+		conf := readConfig(c, logger)
 
 		if conf.shawarmaServiceAcctName != "" {
 			// If using a service account token, startup the monitor for service accounts
 			err := webhook.InitializeServiceAcctMonitor()
 			if err != nil {
-				log.Warn(err)
+				logger.Warn("Error initializing service account monitor",
+					zap.Error(err))
 			}
 		}
 
@@ -129,11 +128,11 @@ func main() {
 			return err
 		}
 
-		if err = startHTTPServerAndWait(simpleServer); err != nil {
+		if err = simpleServer.StartAndWait(); err != nil {
 			return err
 		}
 
-		log.Infof("Shutting down initiated")
+		logger.Info("Shutdown initiated")
 		simpleServer.Shutdown()
 		mutator.Shutdown()
 		return nil
@@ -141,23 +140,25 @@ func main() {
 
 	err := app.Run(context.Background(), os.Args)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal("Fatal error",
+			zap.Error(err))
 	}
 }
 
-func addRoutes(simpleServer httpd.SimpleServer, conf config) (routes.MutatorController, error) {
+func addRoutes(simpleServer httpd.SimpleServer, conf *config) (routes.MutatorController, error) {
 	mutator, err := routes.NewMutatorController(
 		conf.sideCarConfigFile,
 		conf.shawarmaImage,
 		conf.shawarmaServiceAcctName,
-		conf.shawarmaSecretTokenName)
+		conf.shawarmaSecretTokenName,
+		conf.httpdConf.Logger)
 	if err != nil {
 		return nil, err
 	}
 
 	simpleServer.AddRoute("/mutate", mutator.Mutate)
 
-	health, err := routes.NewHealthController()
+	health, err := routes.NewHealthController(conf.httpdConf.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -167,42 +168,19 @@ func addRoutes(simpleServer httpd.SimpleServer, conf config) (routes.MutatorCont
 	return mutator, nil
 }
 
-func readConfig(c *cli.Command) config {
-	var conf config
-
-	conf.httpdConf.Port = c.Uint16("port")
-	conf.httpdConf.CertFile = c.String("cert-file")
-	conf.httpdConf.KeyFile = c.String("key-file")
-	conf.sideCarConfigFile = c.String("config")
-	conf.shawarmaImage = c.String("shawarma-image")
-	conf.shawarmaServiceAcctName = c.String("shawarma-service-acct-name")
-	conf.shawarmaSecretTokenName = c.String("shawarma-secret-token-name")
-
-	return conf
-}
-
-func startHTTPServerAndWait(simpleServer httpd.SimpleServer) error {
-	errC := make(chan error, 1)
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-
-	defer func() {
-		close(errC)
-		close(signalChan)
-	}()
-
-	log.Infof("SimpleServer starting to listen in port %v", simpleServer.Port())
-
-	simpleServer.Start(errC)
-
-	// block until an error or signal from os to
-	// terminate the process
-	var retErr error
-	select {
-	case err := <-errC:
-		retErr = err
-	case <-signalChan:
+func readConfig(c *cli.Command, logger *zap.Logger) *config {
+	conf := config{
+		httpdConf: httpd.Conf{
+			Port:     c.Uint16("port"),
+			CertFile: c.String("cert-file"),
+			KeyFile:  c.String("key-file"),
+			Logger:   logger,
+		},
+		sideCarConfigFile:       c.String("config"),
+		shawarmaImage:           c.String("shawarma-image"),
+		shawarmaServiceAcctName: c.String("shawarma-service-acct-name"),
+		shawarmaSecretTokenName: c.String("shawarma-secret-token-name"),
 	}
 
-	return retErr
+	return &conf
 }
