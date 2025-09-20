@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -68,6 +68,7 @@ type Mutator struct {
 	ShawarmaServiceAcctName string
 	ShawarmaSecretTokenName string
 	ServiceAcctMonitors     *ServiceAcctMonitorSet
+	Logger					*zap.Logger
 }
 
 func Init() {
@@ -130,22 +131,28 @@ func (mutator Mutator) Mutate(req []byte) ([]byte, error) {
 }
 
 func mutate(req *v1.AdmissionRequest, mutator *Mutator) *v1.AdmissionResponse {
-	log.Infof("AdmissionReview for Kind=%v, Namespace=%v Name=%v UID=%v patchOperation=%v UserInfo=%v",
-		req.Kind, req.Namespace, req.Name, req.UID, req.Operation, req.UserInfo)
+	mutator.Logger.Info("AdmissionReview",
+		zap.Any("kind", req.Kind),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name),
+		zap.String("uid", string(req.UID)),
+		zap.String("operation", string(req.Operation)),
+		zap.Any("userInfo", req.UserInfo))
 
 	pod, err := unMarshall(req)
 	if err != nil {
-		return errorResponse(req.UID, err)
+		return mutator.errorResponse(req.UID, err)
 	}
 
 	if sideCarNames, ok := shouldMutate(systemNameSpaces, &pod.ObjectMeta, req.Namespace, mutator); ok {
 		annotations := map[string]string{sideCarInjectionStatusAnnotation: injectedValue}
 		patchBytes, err := createPatch(&pod, req.Namespace, sideCarNames, mutator, annotations)
 		if err != nil {
-			return errorResponse(req.UID, err)
+			return mutator.errorResponse(req.UID, err)
 		}
 
-		log.Infof("AdmissionResponse: Patch: %v\n", string(patchBytes))
+		mutator.Logger.Info("AdmissionResponse: Patch",
+			zap.ByteString("patch", patchBytes))
 		pt := v1.PatchTypeJSONPatch
 		return &v1.AdmissionResponse{
 			UID:       req.UID,
@@ -160,8 +167,11 @@ func mutate(req *v1.AdmissionRequest, mutator *Mutator) *v1.AdmissionResponse {
 	}
 }
 
-func errorResponse(uid types.UID, err error) *v1.AdmissionResponse {
-	log.Errorf("AdmissionReview failed : [%v] %s", uid, err)
+func (mutator *Mutator) errorResponse(uid types.UID, err error) *v1.AdmissionResponse {
+	mutator.Logger.Error("AdmissionReview failed",
+		zap.String("uid", string(uid)), 
+		zap.Error(err))
+
 	return &v1.AdmissionResponse{
 		Result: &metav1.Status{
 			Message: err.Error(),
@@ -181,9 +191,14 @@ func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta, namespace s
 		podName = metadata.GenerateName
 	}
 
+	logger := mutator.Logger.With(
+		zap.String("podName", podName), 
+		zap.String("namespace", namespace))
+
 	for _, namespace := range ignoredList {
 		if metadata.Namespace == namespace {
-			log.Infof("Skipping mutation for [%v] in special namespace: [%v]", podName, namespace)
+			logger.Info("Skipping mutation for pod in special namespace")
+
 			return nil, false
 		}
 	}
@@ -194,7 +209,8 @@ func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta, namespace s
 	}
 
 	if status, ok := annotations[sideCarInjectionStatusAnnotation]; ok && strings.ToLower(status) == injectedValue {
-		log.Infof("Skipping mutation for [%v/%v]. Has been mutated already", namespace, podName)
+		logger.Info("Skipping mutation for pod. Has been mutated already")
+
 		return nil, false
 	}
 
@@ -206,19 +222,24 @@ func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta, namespace s
 
 	if serviceName, ok := annotations[sideCarInjectionAnnotation]; ok {
 		if len(serviceName) > 0 {
-			log.Infof("shawarma injection for %v/%v: service-name: %v sidecar: %v", namespace, podName, serviceName, selectedSideCarName)
+			logger.Info("shawarma injection for pod",
+				zap.String("serviceName", serviceName),
+				zap.String("sidecar", selectedSideCarName))
+
 			return []string{selectedSideCarName}, true
 		}
 	}
 
 	if serviceLabels, ok := annotations[sideCarLabelInjectionAnnotation]; ok {
 		if len(serviceLabels) > 0 {
-			log.Infof("shawarma injection for %v/%v: service-labels: %v sidecar: %v", namespace, podName, serviceLabels, selectedSideCarName)
+			logger.Info("shawarma injection for pod",
+				zap.String("serviceLabels", serviceLabels),
+				zap.String("sidecar", selectedSideCarName))
 			return []string{selectedSideCarName}, true
 		}
 	}
 
-	log.Infof("Skipping mutation for [%v/%v]. No action required", namespace, podName)
+	logger.Info("Skipping mutation for pod. No action required")
 	return nil, false
 }
 
@@ -235,7 +256,9 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 	existingAnnotations := pod.ObjectMeta.GetAnnotations()
 	if existingAnnotations != nil {
 		if image, ok := existingAnnotations[sideCarInjectionImageAnnotation]; ok {
-			log.Infof("Overriding Shawarma image, using %v", image)
+			mutator.Logger.Info("Overriding Shawarma image", 
+				zap.String("image", image))
+
 			shawarmaImage = image
 		}
 	}
@@ -251,9 +274,12 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 
 		secretName = monitor.SecretName
 		if secretName == "" {
-			return nil, fmt.Errorf("Cannot find secret for service account %s/%s", namespace, mutator.ShawarmaServiceAcctName)
+			return nil, fmt.Errorf("cannot find secret for service account %s/%s", namespace, mutator.ShawarmaServiceAcctName)
 		} else {
-			log.Debugf("Using service token %s for service account %s/%s", secretName, namespace, mutator.ShawarmaServiceAcctName)
+			mutator.Logger.Debug("Using service token for service account",
+				zap.String("secretName", secretName),
+				zap.String("namespace", namespace),
+				zap.String("serviceAccountName", mutator.ShawarmaServiceAcctName))
 		}
 	}
 
@@ -300,7 +326,7 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 		return json.Marshal(patch)
 	}
 
-	return nil, fmt.Errorf("Did not find one or more sidecars to inject %v", sideCarNames)
+	return nil, fmt.Errorf("did not find one or more sidecars to inject %v", sideCarNames)
 }
 
 func addContainer(target, added []corev1.Container, basePath string) []patchOperation {

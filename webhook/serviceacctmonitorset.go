@@ -3,12 +3,22 @@ package webhook
 import (
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // ServiceAcctMonitorSet contains a set of ServiceAcctMonitor
 type ServiceAcctMonitorSet struct {
 	Monitors []*ServiceAcctMonitor
 	mutex    sync.Mutex
+	logger   *zap.Logger
+}
+
+func NewServiceAcctMonitorSet(logger *zap.Logger) *ServiceAcctMonitorSet {
+	return &ServiceAcctMonitorSet{
+		Monitors: []*ServiceAcctMonitor{},
+		logger:   logger,
+	}
 }
 
 // StopAll service account monitors
@@ -34,7 +44,7 @@ func (set *ServiceAcctMonitorSet) Get(namespace string, serviceAccountName strin
 	}
 
 	// Monitor isn't found, so let's create
-	monitor, err := NewServiceAcctMonitor(namespace, serviceAccountName)
+	monitor, err := NewServiceAcctMonitor(namespace, serviceAccountName, set.logger)
 	if err != nil {
 		return nil, err
 	}

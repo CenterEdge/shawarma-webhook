@@ -3,7 +3,7 @@ package webhook
 import (
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
@@ -19,20 +19,23 @@ type ServiceAcctMonitor struct {
 	hasFirstUpdate     bool
 	firstUpdate        chan struct{}
 	stop               chan struct{}
+	logger             *zap.Logger
 }
 
 var (
-	k8sConfig *rest.Config
 	k8sClient *kubernetes.Clientset
 )
 
 // NewServiceAcctMonitor Create a new service account monitor
-func NewServiceAcctMonitor(namespace string, serviceAccountName string) (*ServiceAcctMonitor, error) {
+func NewServiceAcctMonitor(namespace string, serviceAccountName string, logger *zap.Logger) (*ServiceAcctMonitor, error) {
 	monitor := ServiceAcctMonitor{
 		Namespace:          namespace,
 		ServiceAccountName: serviceAccountName,
 		firstUpdate:        make(chan struct{}, 1),
 		stop:               make(chan struct{}),
+		logger:             logger.With(
+			zap.String("namespace", namespace),
+			zap.String("serviceAccountName", serviceAccountName)),
 	}
 
 	return &monitor, nil
@@ -72,21 +75,19 @@ func (monitor *ServiceAcctMonitor) Start() error {
 				AddFunc: func(obj interface{}) {
 					serviceAccount := obj.(*v1.ServiceAccount)
 
-					log.Debugf("service account %s added", serviceAccount.Name)
+					monitor.logger.Debug("service account added")
 
 					monitor.updateSecretName(extractSecretName(serviceAccount))
 				},
 				DeleteFunc: func(obj interface{}) {
-					serviceAccount := obj.(*v1.ServiceAccount)
-
-					log.Debugf("service account %s deleted\n", serviceAccount.Name)
+					monitor.logger.Debug("service account deleted")
 
 					monitor.updateSecretName("")
 				},
 				UpdateFunc: func(oldObj, newObj interface{}) {
 					serviceAccount := newObj.(*v1.ServiceAccount)
 
-					log.Debugf("service account %s changed\n", serviceAccount.Name)
+					monitor.logger.Debug("service account changed")
 
 					monitor.updateSecretName(extractSecretName(serviceAccount))
 				},
@@ -113,18 +114,16 @@ func (monitor *ServiceAcctMonitor) WaitForFirstUpdate(timeout time.Duration) boo
 		return true
 	}
 
-	log.Infof("Waiting for first update for service account %s/%s", monitor.Namespace, monitor.ServiceAccountName)
+	monitor.logger.Info("Waiting for first update for service account")
 
 	select {
 	case <-monitor.firstUpdate:
-		log.Debugf("Got first update for service account %s/%s", monitor.Namespace, monitor.ServiceAccountName)
+		monitor.logger.Debug("Got first update for service account")
 		return true
 	case <-time.After(timeout):
-		log.Warnf("Timeout waiting for first update for service account %s/%s", monitor.Namespace, monitor.ServiceAccountName)
+		monitor.logger.Warn("Timeout waiting for first update for service account")
 		return false
 	}
-
-	return false
 }
 
 func (monitor *ServiceAcctMonitor) updateSecretName(secretName string) {
@@ -157,7 +156,6 @@ func InitializeServiceAcctMonitor() error {
 		return err
 	}
 
-	k8sConfig = config
 	k8sClient = clientset
 
 	return nil
