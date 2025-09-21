@@ -10,6 +10,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/CenterEdge/shawarma-webhook/filewatcher"
 	"go.uber.org/zap"
 )
 
@@ -49,8 +50,8 @@ type simpleServerImpl struct {
 	mux    *http.ServeMux
 
 	certMutex sync.RWMutex
-	certWatcher *FileWatcher
-	keyWatcher *FileWatcher
+	certWatcher *filewatcher.FileWatcher
+	keyWatcher *filewatcher.FileWatcher
 	keyPair *tls.Certificate
 }
 
@@ -59,26 +60,26 @@ func (s *simpleServerImpl) AddRoute(pattern string, route Route) {
 }
 
 func (s *simpleServerImpl) Start(errs chan error) {
-	certWatcher, err := NewFileWatcher(s.conf.CertFile, func() {
+	certWatcher, err := filewatcher.NewFileWatcher(s.conf.CertFile, func() {
 		err := s.load()
 		if err != nil {
 			s.conf.Logger.Error("Error loading certificate", 
 				zap.Error(err))
 		}
-	})
+	}, s.conf.Logger)
 	if err != nil {
 		errs <- err
 		return
 	}
 	s.certWatcher = &certWatcher
 
-	keyWatcher, err := NewFileWatcher(s.conf.KeyFile, func() {
+	keyWatcher, err := filewatcher.NewFileWatcher(s.conf.KeyFile, func() {
 		err := s.load()
 		if err != nil {
 			s.conf.Logger.Error("Error loading key", 
 				zap.Error(err))
 		}
-	})
+	}, s.conf.Logger)
 	if err != nil {
 		errs <- err
 		return

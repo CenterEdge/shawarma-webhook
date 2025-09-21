@@ -11,16 +11,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package httpd
+package filewatcher
 
 import (
-	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/fsnotify/fsnotify"
+	"go.uber.org/zap"
 )
 
 // FileWatcher is an interface we use to watch changes in files
@@ -32,15 +32,17 @@ type FileWatcher interface {
 type OSFileWatcher struct {
 	file    string
 	watcher *fsnotify.Watcher
+	logger  *zap.Logger
 	// onEvent callback to be invoked after the file being watched changes
 	onEvent func()
 }
 
 // NewFileWatcher creates a new FileWatcher
-func NewFileWatcher(file string, onEvent func()) (FileWatcher, error) {
+func NewFileWatcher(file string, onEvent func(), logger *zap.Logger) (FileWatcher, error) {
 	fw := OSFileWatcher{
 		file:    file,
 		onEvent: onEvent,
+		logger:  logger,
 	}
 	err := fw.watch()
 	return fw, err
@@ -72,7 +74,9 @@ func (f *OSFileWatcher) watch() error {
 				if event.Op&fsnotify.Create == fsnotify.Create ||
 					event.Op&fsnotify.Write == fsnotify.Write {
 					if finfo, err := os.Lstat(event.Name); err != nil {
-						log.Printf("can not lstat file: %v\n", err)
+						f.logger.Debug("can not lstat file",
+							zap.String("filename", event.Name),
+							zap.Error(err))
 					} else if finfo.Mode()&os.ModeSymlink != 0 {
 						if currentRealFile, err := filepath.EvalSymlinks(f.file); err == nil &&
 							currentRealFile != realFile {
@@ -87,7 +91,9 @@ func (f *OSFileWatcher) watch() error {
 				}
 			case err := <-watcher.Errors:
 				if err != nil {
-					log.Printf("error watching file: %v\n", err)
+					f.logger.Error("error watching file",
+						zap.String("filename", f.file),
+						zap.Error(err))
 				}
 			}
 		}

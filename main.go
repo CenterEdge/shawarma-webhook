@@ -153,13 +153,8 @@ func main() {
 }
 
 func addRoutes(simpleServer httpd.SimpleServer, conf *config) (routes.MutatorController, error) {
-	sideCars, err := webhook.LoadSideCars(conf.sideCarConfigFile, conf.httpdConf.Logger)
-	if err != nil {
-		return nil, err
-	}
-
 	mutator, err := routes.NewMutatorController(&webhook.MutatorConfig{
-		SideCars:                sideCars,
+		SideCarConfigFile:       conf.sideCarConfigFile,
 		ShawarmaImage:           conf.shawarmaImage,
 		NativeSidecars:          conf.nativeSidecars,
 		ShawarmaServiceAcctName: conf.shawarmaServiceAcctName,
