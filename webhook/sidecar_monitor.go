@@ -9,12 +9,12 @@ import (
 
 type SideCarMonitor struct {
 	filePath string
-	output chan<- map[string]*SideCar
-	watcher filewatcher.FileWatcher
-	logger  *zap.Logger
+	output   chan map[string]*SideCar
+	logger   *zap.Logger
+	watcher  filewatcher.FileWatcher
 }
 
-func NewSideCarMonitor(filePath string, output chan<- map[string]*SideCar, logger *zap.Logger) (*SideCarMonitor, error) {
+func NewSideCarMonitor(filePath string, logger *zap.Logger) (*SideCarMonitor, error) {
 	if filePath == "" {
 		return nil, fmt.Errorf("filePath is required")
 	}
@@ -24,18 +24,22 @@ func NewSideCarMonitor(filePath string, output chan<- map[string]*SideCar, logge
 
 	monitor := &SideCarMonitor{
 		filePath: filePath,
-		output:  output,
-		logger:  logger,
+		output:   make(chan map[string]*SideCar),
+		logger:   logger,
 	}
 
-	watcher, err := filewatcher.NewFileWatcher(filePath, func() {
-		logger.Debug("File changed",
-			zap.String("file", filePath))
+	return monitor, nil
+}
+
+func (monitor *SideCarMonitor) Start() error {
+	watcher, err := filewatcher.NewFileWatcher(monitor.filePath, func() {
+		monitor.logger.Debug("File changed",
+			zap.String("file", monitor.filePath))
 
 		monitor.processFile()
-	}, logger)
+	}, monitor.logger)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	monitor.watcher = watcher
@@ -43,13 +47,19 @@ func NewSideCarMonitor(filePath string, output chan<- map[string]*SideCar, logge
 	// Perform initial load
 	monitor.processFile()
 
-	return monitor, nil
+	return nil
+}
+
+func (monitor *SideCarMonitor) GetOutput() <-chan map[string]*SideCar {
+	return monitor.output
 }
 
 func (monitor *SideCarMonitor) Shutdown() {
 	if monitor.watcher != nil {
 		monitor.watcher.Close()
 		monitor.watcher = nil
+
+		close(monitor.output)
 	}
 }
 

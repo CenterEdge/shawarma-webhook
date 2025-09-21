@@ -68,7 +68,6 @@ type MutatorConfig struct {
 type Mutator struct {
 	sideCars                atomic.Value
 	sideCarMonitor          *SideCarMonitor
-	sideCarConfigChange     chan map[string]*SideCar
 
 	shawarmaImage           string
 	nativeSidecars          bool
@@ -97,9 +96,14 @@ func NewMutator(config *MutatorConfig) (*Mutator, error) {
 		return nil, fmt.Errorf("config.Logger is required")
 	}
 
+	monitor, err := NewSideCarMonitor(config.SideCarConfigFile, config.Logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create side car monitor: %w", err)
+	}
+
 	mutator := &Mutator{
 		sideCars:                atomic.Value{},
-		sideCarConfigChange:     make(chan map[string]*SideCar),
+		sideCarMonitor:          monitor,
 		shawarmaImage:           config.ShawarmaImage,
 		nativeSidecars:          config.NativeSidecars,
 		shawarmaServiceAcctName: config.ShawarmaServiceAcctName,
@@ -109,16 +113,14 @@ func NewMutator(config *MutatorConfig) (*Mutator, error) {
 	}
 
 	go func() {
-		for sideCarConfig := range mutator.sideCarConfigChange {
+		for sideCarConfig := range monitor.GetOutput() {
 			mutator.sideCars.Store(sideCarConfig)
+
+			mutator.Logger.Info("Sidecar config loaded")
 		}
 	}()
 
-	monitor, err := NewSideCarMonitor(config.SideCarConfigFile, mutator.sideCarConfigChange, config.Logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create side car monitor: %w", err)
-	}
-	mutator.sideCarMonitor = monitor
+	monitor.Start()
 	
 	return mutator, nil
 }
@@ -133,7 +135,6 @@ func (mutator *Mutator) Shutdown() {
 	if mutator.sideCarMonitor != nil {
 		mutator.sideCarMonitor.Shutdown()
 		mutator.sideCarMonitor = nil
-		close(mutator.sideCarConfigChange)
 	}
 }
 
