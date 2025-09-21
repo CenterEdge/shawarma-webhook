@@ -138,7 +138,15 @@ func (mutator *Mutator) Shutdown() {
 }
 
 func (mutator *Mutator) GetSideCars() map[string]*SideCar {
-	return mutator.sideCars.Load().(map[string]*SideCar)
+	val := mutator.sideCars.Load()
+	if val == nil {
+		return make(map[string]*SideCar)
+	}
+	sideCars, ok := val.(map[string]*SideCar)
+	if !ok {
+		return make(map[string]*SideCar)
+	}
+	return sideCars
 }
 
 /*Mutate function performs the actual mutation of pod spec*/
