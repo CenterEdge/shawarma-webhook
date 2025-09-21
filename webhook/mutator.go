@@ -339,7 +339,7 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 		}
 	}
 
-	if (mutator.nativeSidecars) {
+	if mutator.nativeSidecars {
 		patch = append(patch, addContainer(pod.Spec.InitContainers, containers, "/spec/initContainers")...)
 	} else {
 		patch = append(patch, addContainer(pod.Spec.Containers, containers, "/spec/containers")...)
