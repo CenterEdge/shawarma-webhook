@@ -50,8 +50,8 @@ type simpleServerImpl struct {
 	mux    *http.ServeMux
 
 	certMutex sync.RWMutex
-	certWatcher *filewatcher.FileWatcher
-	keyWatcher *filewatcher.FileWatcher
+	certWatcher filewatcher.FileWatcher
+	keyWatcher filewatcher.FileWatcher
 	keyPair *tls.Certificate
 }
 
@@ -71,7 +71,7 @@ func (s *simpleServerImpl) Start(errs chan error) {
 		errs <- err
 		return
 	}
-	s.certWatcher = &certWatcher
+	s.certWatcher = certWatcher
 
 	keyWatcher, err := filewatcher.NewFileWatcher(s.conf.KeyFile, func() {
 		err := s.load()
@@ -84,7 +84,7 @@ func (s *simpleServerImpl) Start(errs chan error) {
 		errs <- err
 		return
 	}
-	s.keyWatcher = &keyWatcher
+	s.keyWatcher = keyWatcher
 
 	// Load initially
 	err = s.load()
@@ -134,12 +134,12 @@ func (s *simpleServerImpl) Shutdown() {
 	s.server.Shutdown(context.Background())
 
 	if s.certWatcher != nil {
-		(*s.certWatcher).Close()
+		s.certWatcher.Close()
 		s.certWatcher = nil
 	}
 
 	if s.keyWatcher != nil {
-		(*s.keyWatcher).Close()
+		s.keyWatcher.Close()
 		s.keyWatcher = nil
 	}
 }

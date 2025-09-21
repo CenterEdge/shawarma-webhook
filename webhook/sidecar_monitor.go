@@ -10,7 +10,7 @@ import (
 type SideCarMonitor struct {
 	filePath string
 	output chan<- map[string]*SideCar
-	watcher *filewatcher.FileWatcher
+	watcher filewatcher.FileWatcher
 	logger  *zap.Logger
 }
 
@@ -38,7 +38,7 @@ func NewSideCarMonitor(filePath string, output chan<- map[string]*SideCar, logge
 		return nil, err
 	}
 
-	monitor.watcher = &watcher
+	monitor.watcher = watcher
 
 	// Perform initial load
 	monitor.processFile()
@@ -48,7 +48,7 @@ func NewSideCarMonitor(filePath string, output chan<- map[string]*SideCar, logge
 
 func (monitor *SideCarMonitor) Shutdown() {
 	if monitor.watcher != nil {
-		(*monitor.watcher).Close()
+		monitor.watcher.Close()
 		monitor.watcher = nil
 	}
 }

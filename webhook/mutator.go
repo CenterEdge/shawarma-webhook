@@ -52,7 +52,7 @@ type unversionedAdmissionReview struct {
 type patchOperation struct {
 	Op    string      `json:"op"`
 	Path  string      `json:"path"`
-	Value interface{} `json:"value,omitempty"`
+	Value any         `json:"value,omitempty"`
 }
 
 type MutatorConfig struct {
