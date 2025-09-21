@@ -363,7 +363,7 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 			for i := range sideCar.Containers {
 				container := &sideCar.Containers[i]
 
-				if (container.Image == "|SHAWARMA_IMAGE|") {
+				if container.Image == "|SHAWARMA_IMAGE|" {
 					container.Image = shawarmaImage
 				}
 
