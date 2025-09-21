@@ -326,6 +326,8 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 	if existingAnnotations != nil {
 		if image, ok := existingAnnotations[sideCarInjectionImageAnnotation]; ok {
 			mutator.Logger.Info("Overriding Shawarma image", 
+				zap.String("namespace", namespace),
+				zap.String("podName", pod.GetObjectMeta().GetName()),
 				zap.String("image", image))
 
 			shawarmaImage = image
@@ -358,20 +360,41 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 		if sideCarSrc, ok := sideCars[name]; ok {
 			sideCar := sideCarSrc.DeepCopy()
 
-			for i, container := range sideCar.Containers {
-				sideCar.Containers[i].Image = strings.ReplaceAll(container.Image, "|SHAWARMA_IMAGE|", shawarmaImage)
+			for i := range sideCar.Containers {
+				container := &sideCar.Containers[i]
+
+				if (container.Image == "|SHAWARMA_IMAGE|") {
+					container.Image = shawarmaImage
+				}
 
 				if mutator.nativeSidecars {
 					// Set restart policy to Always so it's a sidecar and not a normal init container
 					restartPolicy := corev1.ContainerRestartPolicyAlways
-					sideCar.Containers[i].RestartPolicy = &restartPolicy
+					container.RestartPolicy = &restartPolicy
 				}
 			}
 
 			// Apply the configured volumes
-			for i, volume := range sideCar.Volumes {
-				if volume.Secret != nil {
-					sideCar.Volumes[i].Secret.SecretName = strings.ReplaceAll(volume.Secret.SecretName, "|SHAWARMA_TOKEN_NAME|", secretName)
+			for i := range sideCar.Volumes {
+				volume := &sideCar.Volumes[i]
+
+				if secretName != "" {
+					if volume.Secret != nil {
+						// Update secret volume sources
+
+						if volume.Secret.SecretName == "|SHAWARMA_TOKEN_NAME|" {
+							volume.Secret.SecretName = secretName
+						}
+					} else if volume.Projected != nil {
+						// Also update secret sources in projected volumes
+
+						for i := range volume.Projected.Sources {
+							source := &volume.Projected.Sources[i]
+							if source.Secret != nil && source.Secret.Name == "|SHAWARMA_TOKEN_NAME|" {
+								source.Secret.Name = secretName
+							}
+						}
+					}
 				}
 			}
 
@@ -399,7 +422,7 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 func addContainer(target, added []corev1.Container, basePath string) []patchOperation {
 	var patch []patchOperation
 	first := len(target) == 0
-	var value interface{}
+	var value any
 	for _, add := range added {
 		value = add
 		path := basePath
@@ -421,7 +444,7 @@ func addContainer(target, added []corev1.Container, basePath string) []patchOper
 func addVolume(target, added []corev1.Volume, basePath string) []patchOperation {
 	var patch []patchOperation
 	first := len(target) == 0
-	var value interface{}
+	var value any
 	for _, add := range added {
 		value = add
 		path := basePath
@@ -443,7 +466,7 @@ func addVolume(target, added []corev1.Volume, basePath string) []patchOperation 
 func addImagePullSecrets(target, added []corev1.LocalObjectReference, basePath string) []patchOperation {
 	var patch []patchOperation
 	first := len(target) == 0
-	var value interface{}
+	var value any
 	for _, add := range added {
 		value = add
 		path := basePath
