@@ -17,6 +17,7 @@ type config struct {
 	shawarmaImage           string
 	shawarmaServiceAcctName string
 	shawarmaSecretTokenName string
+	nativeSidecars          bool
 }
 
 // Set on build
@@ -74,6 +75,12 @@ func main() {
 				Usage:   "Default Docker image",
 				Value:   "centeredge/shawarma:2.0.0-beta001",
 				Sources: cli.EnvVars("SHAWARMA_IMAGE"),
+			},
+			&cli.BoolFlag{
+				Name:    "native-sidecars",
+				Usage:   "Use Kubernetes (>=1.29) native sidecars",
+				Value:   true,
+				Sources: cli.EnvVars("SHAWARMA_NATIVE_SIDECARS"),
 			},
 			&cli.StringFlag{
 				Name:    "shawarma-service-acct-name",
@@ -146,12 +153,19 @@ func main() {
 }
 
 func addRoutes(simpleServer httpd.SimpleServer, conf *config) (routes.MutatorController, error) {
-	mutator, err := routes.NewMutatorController(
-		conf.sideCarConfigFile,
-		conf.shawarmaImage,
-		conf.shawarmaServiceAcctName,
-		conf.shawarmaSecretTokenName,
-		conf.httpdConf.Logger)
+	sideCars, err := webhook.LoadSideCars(conf.sideCarConfigFile, conf.httpdConf.Logger)
+	if err != nil {
+		return nil, err
+	}
+
+	mutator, err := routes.NewMutatorController(&webhook.MutatorConfig{
+		SideCars:                sideCars,
+		ShawarmaImage:           conf.shawarmaImage,
+		NativeSidecars:          conf.nativeSidecars,
+		ShawarmaServiceAcctName: conf.shawarmaServiceAcctName,
+		ShawarmaSecretTokenName: conf.shawarmaSecretTokenName,
+		Logger:                  conf.httpdConf.Logger,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +194,7 @@ func readConfig(c *cli.Command, logger *zap.Logger) *config {
 		shawarmaImage:           c.String("shawarma-image"),
 		shawarmaServiceAcctName: c.String("shawarma-service-acct-name"),
 		shawarmaSecretTokenName: c.String("shawarma-secret-token-name"),
+		nativeSidecars:          c.Bool("native-sidecars"),
 	}
 
 	return &conf
