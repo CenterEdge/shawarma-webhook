@@ -45,11 +45,11 @@ func NewFileWatcher(file string, onEvent func(), logger *zap.Logger) (FileWatche
 		logger:  logger,
 	}
 	err := fw.watch()
-	return &fw, err
+	return fw, err
 }
 
 // Close ends the watch
-func (f *OSFileWatcher) Close() error {
+func (f OSFileWatcher) Close() error {
 	return f.watcher.Close()
 }
 
