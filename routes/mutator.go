@@ -5,44 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 
 	"github.com/CenterEdge/shawarma-webhook/webhook"
 	"go.uber.org/zap"
-	"sigs.k8s.io/yaml"
 )
-
-/*SideCars is an array of named SideCar instances*/
-type SideCars struct {
-	Sidecars []SideCar `json:"sidecars"`
-}
-
-/*SideCar is a named sidecar to be injected*/
-type SideCar struct {
-	Name    string          `json:"name"`
-	Sidecar webhook.SideCar `json:"sidecar"`
-}
-
-func loadConfig(sideCarConfigFile string, logger *zap.Logger) (map[string]webhook.SideCar, error) {
-	data, err := os.ReadFile(sideCarConfigFile)
-	if err != nil {
-		return nil, err
-	}
-	logger.Info("New sideCar configuration", 
-		zap.ByteString("data", data))
-
-	var cfg SideCars
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, err
-	}
-
-	mapOfSideCar := make(map[string]webhook.SideCar)
-	for _, configuration := range cfg.Sidecars {
-		mapOfSideCar[configuration.Name] = configuration.Sidecar
-	}
-
-	return mapOfSideCar, nil
-}
 
 /*MutatorController is an interface that implements mutation method*/
 type MutatorController interface {
@@ -51,25 +17,16 @@ type MutatorController interface {
 }
 
 /*NewMutatorController is a factory method to create an instance of MutatorController*/
-func NewMutatorController(sideCarConfigFile string, shawarmaImage string, shawarmaServiceAcctName string, shawarmaSecretTokenName string, logger *zap.Logger) (MutatorController, error) {
-	mapOfSideCars, err := loadConfig(sideCarConfigFile, logger)
-	if mapOfSideCars != nil {
-		mutator := webhook.Mutator{
-			SideCars:                mapOfSideCars,
-			ShawarmaImage:           shawarmaImage,
-			ShawarmaServiceAcctName: shawarmaServiceAcctName,
-			ShawarmaSecretTokenName: shawarmaSecretTokenName,
-			ServiceAcctMonitors:     webhook.NewServiceAcctMonitorSet(logger),
-			Logger: logger,
-		}
-
+func NewMutatorController(config *webhook.MutatorConfig) (MutatorController, error) {
+	if mutator, err := webhook.NewMutator(config); err != nil {
+		return nil, err
+	} else {
 		return mutatorController{mutator: mutator}, nil
 	}
-	return nil, err
 }
 
 type mutatorController struct {
-	mutator webhook.Mutator
+	mutator *webhook.Mutator
 }
 
 func (controller mutatorController) Shutdown() {

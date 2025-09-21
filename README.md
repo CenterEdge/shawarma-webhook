@@ -74,6 +74,7 @@ The following environment variables may be used to customize behaviors of the we
 | CERT_FILE                  | /etc/shawarma-webhook/certs/tls.crt  | Certificate file used for TLS by the admission webhook |
 | KEY_FILE                   | /etc/shawarma-webhook/certs/tls.key  | Key file used for TLS by the admission webhook |
 | SWAWARMA_IMAGE             | centeredge/shawarma:1.0.0            | Default Shawarma image |
+| SHAWARMA_NATIVE_SIDECARS   | true                                 | Use Kubernetes (>=1.29) native sidecars |
 | SHAWARMA_SERVICE_ACCT_NAME |                                      | Name of the service account which should be used for sidecars (requires a legacy token secret linked to the service account) |
 | SHAWARMA_SECRET_TOKEN_NAME |                                      | Name of the secret containing the Kubernetes token for Shawarma, overrides SHAWARMA_SERVICE_ACCT_NAME |
 

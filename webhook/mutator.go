@@ -54,20 +54,23 @@ type patchOperation struct {
 	Value interface{} `json:"value,omitempty"`
 }
 
-/*SideCar is the template of the sidecar to be implemented*/
-type SideCar struct {
-	Containers       []corev1.Container            `yaml:"containers"`
-	Volumes          []corev1.Volume               `yaml:"volumes"`
-	ImagePullSecrets []corev1.LocalObjectReference `yaml:"imagePullSecrets"`
+type MutatorConfig struct {
+	SideCars                map[string]*SideCar
+	ShawarmaImage           string
+	NativeSidecars      bool
+	ShawarmaServiceAcctName string
+	ShawarmaSecretTokenName string
+	Logger					*zap.Logger
 }
 
 /*Mutator is the interface for mutating webhook*/
 type Mutator struct {
-	SideCars                map[string]SideCar
-	ShawarmaImage           string
-	ShawarmaServiceAcctName string
-	ShawarmaSecretTokenName string
-	ServiceAcctMonitors     *ServiceAcctMonitorSet
+	sideCars                map[string]*SideCar
+	shawarmaImage           string
+	nativeSidecars    bool
+	shawarmaServiceAcctName string
+	shawarmaSecretTokenName string
+	serviceAcctMonitors     *ServiceAcctMonitorSet
 	Logger					*zap.Logger
 }
 
@@ -76,15 +79,40 @@ func Init() {
 	utilruntime.Must(v1beta1.AddToScheme(runtimeScheme))
 }
 
+func NewMutator(config *MutatorConfig) (*Mutator, error) {
+	if config == nil {
+		return nil, fmt.Errorf("config is required")
+	}
+	if config.SideCars == nil {
+		return nil, fmt.Errorf("config.SideCars is required")
+	}
+	if config.ShawarmaImage == "" {
+		return nil, fmt.Errorf("config.ShawarmaImage is required")
+	}
+	if config.Logger == nil {
+		return nil, fmt.Errorf("config.Logger is required")
+	}
+
+	return &Mutator{
+		sideCars:                config.SideCars,
+		shawarmaImage:           config.ShawarmaImage,
+		nativeSidecars:          config.NativeSidecars,
+		shawarmaServiceAcctName: config.ShawarmaServiceAcctName,
+		shawarmaSecretTokenName: config.ShawarmaSecretTokenName,
+		serviceAcctMonitors:     NewServiceAcctMonitorSet(config.Logger),
+		Logger:					 config.Logger,
+	}, nil
+}
+
 // Shutdown the mutator
-func (mutator Mutator) Shutdown() {
-	if mutator.ServiceAcctMonitors != nil {
-		mutator.ServiceAcctMonitors.StopAll()
+func (mutator *Mutator) Shutdown() {
+	if mutator.serviceAcctMonitors != nil {
+		mutator.serviceAcctMonitors.StopAll()
 	}
 }
 
 /*Mutate function performs the actual mutation of pod spec*/
-func (mutator Mutator) Mutate(req []byte) ([]byte, error) {
+func (mutator *Mutator) Mutate(req []byte) ([]byte, error) {
 	admissionReviewResp := v1.AdmissionReview{}
 	admissionReviewReq := v1.AdmissionRequest{}
 	var admissionResponse *v1.AdmissionResponse
@@ -102,7 +130,7 @@ func (mutator Mutator) Mutate(req []byte) ([]byte, error) {
 	_, actualGVK, err := deserializer.Decode(req, nil, &ar)
 
 	if err == nil && ar.Request != nil {
-		admissionResponse = mutate(&admissionReviewReq, &mutator)
+		admissionResponse = mutate(&admissionReviewReq, mutator)
 	} else {
 		message := "Failed to decode request"
 
@@ -215,7 +243,7 @@ func shouldMutate(ignoredList []string, metadata *metav1.ObjectMeta, namespace s
 	}
 
 	selectedSideCarName := sideCarName
-	if mutator.ShawarmaSecretTokenName != "" || mutator.ShawarmaServiceAcctName != "" {
+	if mutator.shawarmaSecretTokenName != "" || mutator.shawarmaServiceAcctName != "" {
 		// We need to attach a token, use the alternate side car format
 		selectedSideCarName = sideCarWithTokenName
 	}
@@ -249,10 +277,9 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 	var containers []corev1.Container
 	var volumes []corev1.Volume
 	var imagePullSecrets []corev1.LocalObjectReference
-	count := 0
 
 	// Check for image override in annotations
-	shawarmaImage := mutator.ShawarmaImage
+	shawarmaImage := mutator.shawarmaImage
 	existingAnnotations := pod.ObjectMeta.GetAnnotations()
 	if existingAnnotations != nil {
 		if image, ok := existingAnnotations[sideCarInjectionImageAnnotation]; ok {
@@ -264,69 +291,65 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 	}
 
 	// Handle the secret name
-	secretName := mutator.ShawarmaSecretTokenName
-	if secretName == "" && mutator.ShawarmaServiceAcctName != "" {
+	secretName := mutator.shawarmaSecretTokenName
+	if secretName == "" && mutator.shawarmaServiceAcctName != "" {
 		// Get the secret name from the service account
-		monitor, err := mutator.ServiceAcctMonitors.Get(namespace, mutator.ShawarmaServiceAcctName, time.Second*1)
+		monitor, err := mutator.serviceAcctMonitors.Get(namespace, mutator.shawarmaServiceAcctName, time.Second*1)
 		if err != nil {
 			return nil, err
 		}
 
 		secretName = monitor.SecretName
 		if secretName == "" {
-			return nil, fmt.Errorf("cannot find secret for service account %s/%s", namespace, mutator.ShawarmaServiceAcctName)
+			return nil, fmt.Errorf("cannot find secret for service account %s/%s", namespace, mutator.shawarmaServiceAcctName)
 		} else {
 			mutator.Logger.Debug("Using service token for service account",
 				zap.String("secretName", secretName),
 				zap.String("namespace", namespace),
-				zap.String("serviceAccountName", mutator.ShawarmaServiceAcctName))
+				zap.String("serviceAccountName", mutator.shawarmaServiceAcctName))
 		}
 	}
 
 	for _, name := range sideCarNames {
-		if sideCar, ok := mutator.SideCars[name]; ok {
-			sideCarCopy := sideCar
+		if sideCarSrc, ok := mutator.sideCars[name]; ok {
+			sideCar := sideCarSrc.DeepCopy()
 
-			sideCarCopy.Containers = make([]corev1.Container, len(sideCar.Containers))
-			sideCarCopy.Volumes = make([]corev1.Volume, len(sideCar.Volumes))
+			for i, container := range sideCar.Containers {
+				sideCar.Containers[i].Image = strings.ReplaceAll(container.Image, "|SHAWARMA_IMAGE|", shawarmaImage)
 
-			// Apply the configured image
-			for i := range sideCar.Containers {
-				containerCopy := sideCar.Containers[i]
-				containerCopy.Image = strings.Replace(containerCopy.Image, "|SHAWARMA_IMAGE|", shawarmaImage, -1)
-
-				sideCarCopy.Containers[i] = containerCopy
+				if mutator.nativeSidecars {
+					// Set restart policy to Always so it's a sidecar and not a normal init container
+					restartPolicy := corev1.ContainerRestartPolicyAlways
+					sideCar.Containers[i].RestartPolicy = &restartPolicy
+				}
 			}
 
 			// Apply the configured volumes
-			for i := range sideCar.Volumes {
-				volumeCopy := sideCar.Volumes[i]
-
-				if volumeCopy.Secret != nil {
-					volumeCopy.Secret.SecretName = strings.Replace(volumeCopy.Secret.SecretName, "|SHAWARMA_TOKEN_NAME|", secretName, -1)
+			for i, volume := range sideCar.Volumes {
+				if volume.Secret != nil {
+					sideCar.Volumes[i].Secret.SecretName = strings.ReplaceAll(volume.Secret.SecretName, "|SHAWARMA_TOKEN_NAME|", secretName)
 				}
-
-				sideCarCopy.Volumes[i] = volumeCopy
 			}
 
-			containers = append(containers, sideCarCopy.Containers...)
-			volumes = append(volumes, sideCarCopy.Volumes...)
-			imagePullSecrets = append(imagePullSecrets, sideCarCopy.ImagePullSecrets...)
-
-			count++
+			containers = append(containers, sideCar.Containers...)
+			volumes = append(volumes, sideCar.Volumes...)
+			imagePullSecrets = append(imagePullSecrets, sideCar.ImagePullSecrets...)
+		} else {
+			return nil, fmt.Errorf("did not find one or more sidecars to inject %v", sideCarNames)
 		}
 	}
 
-	if len(sideCarNames) == count {
+	if mutator.nativeSidecars {
+		patch = append(patch, addContainer(pod.Spec.InitContainers, containers, "/spec/initContainers")...)
+	} else {
 		patch = append(patch, addContainer(pod.Spec.Containers, containers, "/spec/containers")...)
-		patch = append(patch, addVolume(pod.Spec.Volumes, volumes, "/spec/volumes")...)
-		patch = append(patch, addImagePullSecrets(pod.Spec.ImagePullSecrets, imagePullSecrets, "/spec/imagePullSecrets")...)
-		patch = append(patch, updateAnnotation(pod.Annotations, annotations)...)
-
-		return json.Marshal(patch)
 	}
 
-	return nil, fmt.Errorf("did not find one or more sidecars to inject %v", sideCarNames)
+	patch = append(patch, addVolume(pod.Spec.Volumes, volumes, "/spec/volumes")...)
+	patch = append(patch, addImagePullSecrets(pod.Spec.ImagePullSecrets, imagePullSecrets, "/spec/imagePullSecrets")...)
+	patch = append(patch, updateAnnotation(pod.Annotations, annotations)...)
+
+	return json.Marshal(patch)
 }
 
 func addContainer(target, added []corev1.Container, basePath string) []patchOperation {
