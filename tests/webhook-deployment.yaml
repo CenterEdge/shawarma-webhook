@@ -46,6 +46,7 @@ spec:
         volumeMounts:
         - name: secrets
           mountPath: /etc/shawarma-webhook/certs
+          readOnly: true
         livenessProbe:
           httpGet:
             scheme: HTTPS

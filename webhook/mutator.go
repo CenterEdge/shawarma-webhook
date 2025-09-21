@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -51,13 +52,13 @@ type unversionedAdmissionReview struct {
 type patchOperation struct {
 	Op    string      `json:"op"`
 	Path  string      `json:"path"`
-	Value interface{} `json:"value,omitempty"`
+	Value any         `json:"value,omitempty"`
 }
 
 type MutatorConfig struct {
-	SideCars                map[string]*SideCar
+	SideCarConfigFile       string
 	ShawarmaImage           string
-	NativeSidecars      bool
+	NativeSidecars      	bool
 	ShawarmaServiceAcctName string
 	ShawarmaSecretTokenName string
 	Logger					*zap.Logger
@@ -65,13 +66,15 @@ type MutatorConfig struct {
 
 /*Mutator is the interface for mutating webhook*/
 type Mutator struct {
-	sideCars                map[string]*SideCar
+	sideCars                atomic.Value
+	sideCarMonitor          *SideCarMonitor
+
 	shawarmaImage           string
-	nativeSidecars    bool
+	nativeSidecars          bool
 	shawarmaServiceAcctName string
 	shawarmaSecretTokenName string
 	serviceAcctMonitors     *ServiceAcctMonitorSet
-	Logger					*zap.Logger
+	Logger                  *zap.Logger
 }
 
 func Init() {
@@ -83,8 +86,8 @@ func NewMutator(config *MutatorConfig) (*Mutator, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is required")
 	}
-	if config.SideCars == nil {
-		return nil, fmt.Errorf("config.SideCars is required")
+	if config.SideCarConfigFile == "" {
+		return nil, fmt.Errorf("config.SideCarConfigFile is required")
 	}
 	if config.ShawarmaImage == "" {
 		return nil, fmt.Errorf("config.ShawarmaImage is required")
@@ -93,22 +96,61 @@ func NewMutator(config *MutatorConfig) (*Mutator, error) {
 		return nil, fmt.Errorf("config.Logger is required")
 	}
 
-	return &Mutator{
-		sideCars:                config.SideCars,
+	monitor, err := NewSideCarMonitor(config.SideCarConfigFile, config.Logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create side car monitor: %w", err)
+	}
+
+	mutator := &Mutator{
+		sideCars:                atomic.Value{},
+		sideCarMonitor:          monitor,
 		shawarmaImage:           config.ShawarmaImage,
 		nativeSidecars:          config.NativeSidecars,
 		shawarmaServiceAcctName: config.ShawarmaServiceAcctName,
 		shawarmaSecretTokenName: config.ShawarmaSecretTokenName,
 		serviceAcctMonitors:     NewServiceAcctMonitorSet(config.Logger),
-		Logger:					 config.Logger,
-	}, nil
+		Logger:                  config.Logger,
+	}
+
+	go func() {
+		for sideCarConfig := range monitor.GetOutput() {
+			mutator.sideCars.Store(sideCarConfig)
+
+			mutator.Logger.Info("Sidecar config loaded")
+		}
+	}()
+
+	if err := monitor.Start(); err != nil {
+		monitor.Shutdown()
+		return nil, fmt.Errorf("failed to start side car monitor: %w", err)
+	}
+
+	return mutator, nil
 }
 
 // Shutdown the mutator
 func (mutator *Mutator) Shutdown() {
 	if mutator.serviceAcctMonitors != nil {
 		mutator.serviceAcctMonitors.StopAll()
+		mutator.serviceAcctMonitors = nil
 	}
+
+	if mutator.sideCarMonitor != nil {
+		mutator.sideCarMonitor.Shutdown()
+		mutator.sideCarMonitor = nil
+	}
+}
+
+func (mutator *Mutator) GetSideCars() map[string]*SideCar {
+	val := mutator.sideCars.Load()
+	if val == nil {
+		return make(map[string]*SideCar)
+	}
+	sideCars, ok := val.(map[string]*SideCar)
+	if !ok {
+		return make(map[string]*SideCar)
+	}
+	return sideCars
 }
 
 /*Mutate function performs the actual mutation of pod spec*/
@@ -310,8 +352,10 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 		}
 	}
 
+	// Atomic get of the current side cars to prevent errors if they mutate while we're processing
+	sideCars := mutator.GetSideCars()
 	for _, name := range sideCarNames {
-		if sideCarSrc, ok := mutator.sideCars[name]; ok {
+		if sideCarSrc, ok := sideCars[name]; ok {
 			sideCar := sideCarSrc.DeepCopy()
 
 			for i, container := range sideCar.Containers {

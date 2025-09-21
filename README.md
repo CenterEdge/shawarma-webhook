@@ -110,3 +110,7 @@ allocations or other details of the sidecar.
 The example contains two different sidecar definitions `shawarma` and `shawarma-withtoken`. The default is `shawarma`, but `shawarma-withtoken`
 is used if the `SHAWARMA_SERVICE_ACCT_NAME` OR `SHAWARMA_SECRET_TOKEN_NAME` environment variables (or equivalent command line arguments) are used
 to provide legacy API authentication via a `Secret`.
+
+If the configuration file is mounted from a `ConfigMap` it will be monitored for changes. When changes are detected, the new configuration
+will be used for any newly created pods going forward. This allows the configuration to be changed without the need to restart the webhook deployment.
+An example is available at [webhook-deployment-custom.yaml](./tests/webhook-deployment-custom.yaml).
