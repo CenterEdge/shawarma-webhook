@@ -317,7 +317,7 @@ func createPatch(pod *corev1.Pod, namespace string, sideCarNames []string, mutat
 			for i, container := range sideCar.Containers {
 				sideCar.Containers[i].Image = strings.ReplaceAll(container.Image, "|SHAWARMA_IMAGE|", shawarmaImage)
 
-				if (mutator.nativeSidecars) {
+				if mutator.nativeSidecars {
 					// Set restart policy to Always so it's a sidecar and not a normal init container
 					restartPolicy := corev1.ContainerRestartPolicyAlways
 					sideCar.Containers[i].RestartPolicy = &restartPolicy
