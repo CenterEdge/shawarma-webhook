@@ -1,4 +1,4 @@
-# This example demonstrates a Shawarma service account and legacy token which is gives the sidecar
+# This example demonstrates a Shawarma service account and legacy token which gives the sidecar
 # access to the K8S API rather than granting it to the entire pod
 apiVersion: v1
 kind: Secret
