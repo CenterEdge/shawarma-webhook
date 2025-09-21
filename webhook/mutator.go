@@ -124,6 +124,7 @@ func NewMutator(config *MutatorConfig) (*Mutator, error) {
 		monitor.Shutdown()
 		return nil, fmt.Errorf("failed to start side car monitor: %w", err)
 	}
+
 	return mutator, nil
 }
 
