@@ -31,7 +31,7 @@ func LoadSideCars(sideCarConfigFile string, logger *zap.Logger) (map[string]*Sid
 	if err != nil {
 		return nil, err
 	}
-	logger.Info("New sideCar configuration", 
+	logger.Info("New sideCar configuration",
 		zap.ByteString("data", data))
 
 	var cfg SideCars
