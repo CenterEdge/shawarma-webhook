@@ -120,8 +120,10 @@ func NewMutator(config *MutatorConfig) (*Mutator, error) {
 		}
 	}()
 
-	monitor.Start()
-	
+	if err := monitor.Start(); err != nil {
+		monitor.Shutdown()
+		return nil, fmt.Errorf("failed to start side car monitor: %w", err)
+	}
 	return mutator, nil
 }
 
